@@ -12,8 +12,7 @@ from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
 
 app = Flask(__name__)
-# Use a fixed secret key (change this to a random string in production)
-app.secret_key = 'your-secret-key-here'  # For production, set a long random string
+app.secret_key = 'your-secret-key-here'  # Change for production
 
 PRODUCTS_FILE = 'products.json'
 
@@ -74,7 +73,7 @@ def process_file(filepath):
                     period = row['Statement Period']
                 if store == "Unknown" and 'Short Code' in row:
                     raw_store = row['Short Code']
-                    store = STORE_MAP.get(raw_store, raw_store)  # map to friendly name
+                    store = STORE_MAP.get(raw_store, raw_store)
                 order_id = row['Order Line ID']
                 amount = float(row['Amount(Include Tax)'].replace(',', '').strip())
                 fee_name = row['Fee Name']
@@ -123,7 +122,7 @@ def process_file(filepath):
 
     return {
         'period': period,
-        'store': store,   # now friendly name
+        'store': store,
         'positive_payouts': positive_payouts,
         'negative_payouts': negative_payouts,
         'category_positive_profit': category_positive_profit,
@@ -293,11 +292,18 @@ def index():
     products = load_products()
     if request.method == 'POST':
         files = request.files.getlist('files')
+        action = request.form.get('action')   # 'calculate' or 'calculate_full'
+
+        # Common processing for both modes
         results = []
         grand_total = 0.0
         filenames = []
         summary = defaultdict(lambda: {'total_orders': 0, 'total_positive': 0.0, 'total_negative': 0.0,
                                        'net_payout': 0.0, 'gross_profit': 0.0, 'net_profit': 0.0})
+
+        # For full detail mode: collect per-product order payouts
+        detailed_orders = defaultdict(list)   # category -> list of net payouts
+        detailed_costs = {}                    # category -> cost
 
         for f in files:
             if f.filename.endswith('.csv'):
@@ -308,6 +314,8 @@ def index():
                 if error:
                     continue
                 filenames.append(f.filename)
+
+                # --- Populate summary (for 'calculate' mode) ---
                 pos_formatted = {}
                 neg_formatted = {}
                 for cat, vals in result['positive_payouts'].items():
@@ -319,6 +327,18 @@ def index():
                     summary[cat]['total_negative'] += sum(vals)
                 for cat, profit in result['category_positive_profit'].items():
                     summary[cat]['gross_profit'] += profit
+
+                # --- Populate detailed_orders (for 'calculate_full' mode) ---
+                # We need all orders (positive and negative) per category
+                for cat, vals in result['positive_payouts'].items():
+                    detailed_orders[cat].extend(vals)
+                for cat, vals in result['negative_payouts'].items():
+                    detailed_orders[cat].extend(vals)
+                # Also store costs for each category (from products)
+                for cat in result['category_positive_profit'].keys():
+                    detailed_costs[cat] = get_cost(cat, products)
+
+                # Store per-file results for summary display
                 results.append({
                     'filename': f.filename,
                     'period': result['period'],
@@ -333,6 +353,7 @@ def index():
                 })
                 grand_total += result['net_profit']
 
+        # After processing all files, compute summary totals and net profits
         for cat in summary:
             summary[cat]['net_payout'] = summary[cat]['total_positive'] + summary[cat]['total_negative']
             summary[cat]['net_profit'] = summary[cat]['gross_profit'] + summary[cat]['total_negative']
@@ -340,6 +361,7 @@ def index():
         loss = grand_total * 0.05
         final_profit = grand_total - loss
 
+        # Store session data for exports (summary mode only)
         session['results_data'] = {
             'results': results,
             'summary': dict(summary),
@@ -347,21 +369,66 @@ def index():
             'loss': loss,
             'final_profit': final_profit
         }
-        session.modified = True   # <-- This line ensures session is saved
+        session.modified = True
 
-        return render_template_string(
-            HTML_TEMPLATE,
-            results=results,
-            files=filenames,
-            products=products,
-            summary=summary,
-            grand_total=grand_total,
-            loss=loss,
-            final_profit=final_profit,
-            has_results=True
-        )
+        # Decide which view to render
+        if action == 'calculate_full':
+            # Build detailed view data
+            detailed_data = []
+            total_net_profit_all = 0.0
+            for cat, payouts in detailed_orders.items():
+                count = len(payouts)
+                sum_payouts = sum(payouts)
+                cost = detailed_costs.get(cat, 0)
+                net_profit = sum_payouts - (count * cost)
+                total_net_profit_all += net_profit
+                detailed_data.append({
+                    'category': cat,
+                    'count': count,
+                    'payouts': payouts,          # list of net amounts (positive/negative)
+                    'sum_payouts': sum_payouts,
+                    'cost': cost,
+                    'net_profit': net_profit
+                })
+            # Sort by category name
+            detailed_data.sort(key=lambda x: x['category'])
 
-    return render_template_string(HTML_TEMPLATE, results=None, files=None, products=products, summary=None, has_results=False)
+            return render_template_string(
+                HTML_TEMPLATE,
+                results=None,
+                files=filenames,
+                products=products,
+                summary=None,
+                grand_total=None,
+                loss=None,
+                final_profit=None,
+                has_results=False,
+                detailed_data=detailed_data,
+                total_net_profit_all=total_net_profit_all,
+                action='calculate_full'
+            )
+
+        else:
+            # Default 'calculate' mode – show summary
+            return render_template_string(
+                HTML_TEMPLATE,
+                results=results,
+                files=filenames,
+                products=products,
+                summary=summary,
+                grand_total=grand_total,
+                loss=loss,
+                final_profit=final_profit,
+                has_results=True,
+                detailed_data=None,
+                total_net_profit_all=None,
+                action='calculate'
+            )
+
+    # GET request – show empty form
+    return render_template_string(HTML_TEMPLATE, results=None, files=None, products=products, summary=None,
+                                   grand_total=None, loss=None, final_profit=None, has_results=False,
+                                   detailed_data=None, total_net_profit_all=None, action=None)
 
 # ---------- Export routes ----------
 @app.route('/export/excel')
@@ -451,7 +518,7 @@ def add_product():
     save_products(products)
     return jsonify({'success': True})
 
-# ---------- HTML Template ----------
+# ---------- HTML Template (with two buttons) ----------
 HTML_TEMPLATE = '''
 <!DOCTYPE html>
 <html>
@@ -484,6 +551,9 @@ HTML_TEMPLATE = '''
         .total-payout-box { background: #17a2b8; color: white; padding: 8px 16px; border-radius: 8px; display: inline-block; font-weight: bold; font-size: 1.2rem; }
         .store-badge { background: #6c757d; color: white; padding: 4px 12px; border-radius: 20px; font-size: 0.9rem; }
         .designer-credit { text-align: center; color: #6c757d; margin-top: -10px; margin-bottom: 20px; font-size: 0.9rem; }
+        .payout-list { max-height: 300px; overflow-y: auto; background: #f8f9fa; padding: 10px; border-radius: 8px; }
+        .payout-item { font-family: monospace; }
+        .detail-summary { background: #e9ecef; padding: 10px; border-radius: 8px; margin-top: 10px; }
     </style>
 </head>
 <body>
@@ -547,7 +617,14 @@ HTML_TEMPLATE = '''
         <div class="card-body">
             <form method="POST" enctype="multipart/form-data" id="upload-form">
                 <input type="file" name="files" multiple accept=".csv" class="form-control mb-2" required>
-                <button type="submit" class="btn btn-success">Calculate</button>
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <button type="submit" name="action" value="calculate" class="btn btn-success w-100">Calculate</button>
+                    </div>
+                    <div class="col-md-6">
+                        <button type="submit" name="action" value="calculate_full" class="btn btn-primary w-100">Calculate Full</button>
+                    </div>
+                </div>
             </form>
             {% if files %}
             <div class="mt-2"><strong>Files processed:</strong> {{ files|join(', ') }}</div>
@@ -555,10 +632,12 @@ HTML_TEMPLATE = '''
         </div>
     </div>
 
-    <!-- Results -->
-    {% if results %}
+    <!-- ============================================================ -->
+    <!-- 1) SUMMARY VIEW (when 'Calculate' is clicked)                  -->
+    <!-- ============================================================ -->
+    {% if results and action == 'calculate' %}
     <div class="card">
-        <div class="card-header">📈 Results per File</div>
+        <div class="card-header">📈 Results per File (Summary)</div>
         <div class="card-body">
             {% for r in results %}
             <div class="result-box">
@@ -593,9 +672,8 @@ HTML_TEMPLATE = '''
                         <div>Total negative payouts: <span class="negative">{{ "%.2f"|format(r.total_neg) }}</span></div>
                     </div>
                 </div>
-                <!-- Total Payout and Net Profit -->
                 <div class="mt-3">
-                    <strong>Total Orders:</strong> 
+                    <strong>Total Orders:</strong>
                     {% set total_orders = 0 %}
                     {% for cat, data in r.positive.items() %}{% set total_orders = total_orders + data.count %}{% endfor %}
                     {% for cat, data in r.negative.items() %}{% set total_orders = total_orders + data.count %}{% endfor %}
@@ -608,7 +686,7 @@ HTML_TEMPLATE = '''
             </div>
             {% endfor %}
 
-            <!-- Summary by Product -->
+            <!-- Summary by Product (aggregated) -->
             <div class="card mt-4">
                 <div class="card-header">📊 Summary by Product (all files)</div>
                 <div class="card-body">
@@ -644,6 +722,38 @@ HTML_TEMPLATE = '''
         </div>
     </div>
     {% endif %}
+
+    <!-- ============================================================ -->
+    <!-- 2) DETAILED VIEW (when 'Calculate Full' is clicked)           -->
+    <!-- ============================================================ -->
+    {% if detailed_data and action == 'calculate_full' %}
+    <div class="card">
+        <div class="card-header">📋 Full Order Payouts per Product</div>
+        <div class="card-body">
+            {% for item in detailed_data %}
+            <div class="result-box">
+                <h5>{{ item.category }}</h5>
+                <div class="payout-list">
+                    {% for payout in item.payouts %}
+                    <div class="payout-item">{{ "%.2f"|format(payout) }}</div>
+                    {% endfor %}
+                </div>
+                <div class="detail-summary">
+                    <div>Total Orders: <strong>{{ item.count }}</strong></div>
+                    <div>Total Payout: <span class="total-profit">{{ "%.2f"|format(item.sum_payouts) }}</span></div>
+                    <div>Cost per unit: {{ "%.2f"|format(item.cost) }}</div>
+                    <div><strong>Net Profit:</strong> <span class="final-payout-box">{{ "%.2f"|format(item.net_profit) }}</span></div>
+                </div>
+            </div>
+            {% endfor %}
+            <div class="final-profit" style="margin-top: 20px;">
+                <div>Grand Total Net Profit (all products)</div>
+                <div class="amount">{{ "%.2f"|format(total_net_profit_all) }}</div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
 </div>
 
 <script>
