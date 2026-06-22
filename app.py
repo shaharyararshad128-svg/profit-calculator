@@ -24,6 +24,14 @@ DEFAULT_PRODUCTS = {
     'Circuit Breaker': {'cost': 1800, 'keywords': ['Circuit Breaker']},
     'Smart Plug': {'cost': 1100, 'keywords': ['Smart Socket']},
     'Otg Adapter': {'cost': 170, 'keywords': ['Otg Adapter', 'OTG']},
+    'Labubu Doll': {'cost': 900, 'keywords': ['Labubu']},
+}
+
+# ---------- Store Name Mapping ----------
+STORE_MAP = {
+    'PK2NBYJ4S19': 'Global Gadgets',
+    'PK2NBXPB2G6': 'Na Imports',
+    'PK2NBODNVCR': 'Quality Club',
 }
 
 def load_products():
@@ -65,7 +73,8 @@ def process_file(filepath):
                 if period == "Unknown" and 'Statement Period' in row:
                     period = row['Statement Period']
                 if store == "Unknown" and 'Short Code' in row:
-                    store = row['Short Code']
+                    raw_store = row['Short Code']
+                    store = STORE_MAP.get(raw_store, raw_store)  # map to friendly name
                 order_id = row['Order Line ID']
                 amount = float(row['Amount(Include Tax)'].replace(',', '').strip())
                 fee_name = row['Fee Name']
@@ -114,7 +123,7 @@ def process_file(filepath):
 
     return {
         'period': period,
-        'store': store,
+        'store': store,   # now friendly name
         'positive_payouts': positive_payouts,
         'negative_payouts': negative_payouts,
         'category_positive_profit': category_positive_profit,
@@ -441,7 +450,7 @@ def add_product():
     save_products(products)
     return jsonify({'success': True})
 
-# ---------- HTML Template (with "Designed by Shahar Yar") ----------
+# ---------- HTML Template ----------
 HTML_TEMPLATE = '''
 <!DOCTYPE html>
 <html>
