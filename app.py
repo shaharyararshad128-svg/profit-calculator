@@ -12,7 +12,7 @@ from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
 
 app = Flask(__name__)
-app.secret_key = 'your-secret-key-here'
+app.secret_key = 'your-secret-key-here'  # Change this for production
 
 PRODUCTS_FILE = 'products.json'
 
@@ -62,7 +62,6 @@ def process_file(filepath):
         with open(filepath, 'r', encoding='utf-8-sig') as f:
             reader = csv.DictReader(f, delimiter=';')
             for row in reader:
-                # Capture period and store from first row
                 if period == "Unknown" and 'Statement Period' in row:
                     period = row['Statement Period']
                 if store == "Unknown" and 'Short Code' in row:
@@ -115,7 +114,7 @@ def process_file(filepath):
 
     return {
         'period': period,
-        'store': store,   # NEW
+        'store': store,
         'positive_payouts': positive_payouts,
         'negative_payouts': negative_payouts,
         'category_positive_profit': category_positive_profit,
@@ -442,7 +441,7 @@ def add_product():
     save_products(products)
     return jsonify({'success': True})
 
-# ---------- HTML Template ----------
+# ---------- HTML Template (with "Designed by Shahar Yar") ----------
 HTML_TEMPLATE = '''
 <!DOCTYPE html>
 <html>
@@ -474,11 +473,13 @@ HTML_TEMPLATE = '''
         .final-payout-box { background: #28a745; color: white; padding: 8px 16px; border-radius: 8px; display: inline-block; font-weight: bold; font-size: 1.4rem; }
         .total-payout-box { background: #17a2b8; color: white; padding: 8px 16px; border-radius: 8px; display: inline-block; font-weight: bold; font-size: 1.2rem; }
         .store-badge { background: #6c757d; color: white; padding: 4px 12px; border-radius: 20px; font-size: 0.9rem; }
+        .designer-credit { text-align: center; color: #6c757d; margin-top: -10px; margin-bottom: 20px; font-size: 0.9rem; }
     </style>
 </head>
 <body>
 <div class="container">
-    <h1 class="text-center mb-4">📊 Profit Calculator</h1>
+    <h1 class="text-center mb-0">📊 Profit Calculator</h1>
+    <p class="designer-credit">Designed by Shahar Yar</p>
 
     <!-- Undo deletion alert -->
     {% if session.deleted_product %}
@@ -731,4 +732,6 @@ HTML_TEMPLATE = '''
 '''
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    import os
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)
