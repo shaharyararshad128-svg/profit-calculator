@@ -133,7 +133,7 @@ def process_file(filepath):
     }, None
 
 # ---------- Export functions ----------
-def generate_excel(results, summary, grand_total, loss, final_profit):
+def generate_excel_summary(results, summary, grand_total, loss, final_profit):
     wb = Workbook()
     wb.remove(wb.active)
     ws1 = wb.create_sheet("Per-File Results")
@@ -205,12 +205,40 @@ def generate_excel(results, summary, grand_total, loss, final_profit):
     output.seek(0)
     return output
 
-def generate_pdf(results, summary, grand_total, loss, final_profit):
+def generate_excel_detailed(detailed_data, total_net_profit_all):
+    wb = Workbook()
+    wb.remove(wb.active)
+    ws = wb.create_sheet("Full Order Payouts")
+    row = 1
+    for item in detailed_data:
+        ws.cell(row=row, column=1, value="Category: " + item['category'])
+        row += 1
+        ws.cell(row=row, column=1, value="Order Payouts")
+        row += 1
+        for payout in item['payouts']:
+            ws.cell(row=row, column=1, value=round(payout, 2))
+            row += 1
+        ws.cell(row=row, column=1, value="Total Orders: " + str(item['count']))
+        row += 1
+        ws.cell(row=row, column=1, value="Total Payout: " + str(round(item['sum_payouts'], 2)))
+        row += 1
+        ws.cell(row=row, column=1, value="Cost per unit: " + str(round(item['cost'], 2)))
+        row += 1
+        ws.cell(row=row, column=1, value="Net Profit: " + str(round(item['net_profit'], 2)))
+        row += 2
+    ws.cell(row=row, column=1, value="Grand Total Net Profit (all products)")
+    ws.cell(row=row, column=2, value=round(total_net_profit_all, 2))
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return output
+
+def generate_pdf_summary(results, summary, grand_total, loss, final_profit):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
     styles = getSampleStyleSheet()
     story = []
-    story.append(Paragraph("Profit Calculator Results", styles['Title']))
+    story.append(Paragraph("Profit Calculator Results (Summary)", styles['Title']))
     story.append(Spacer(1, 12))
 
     for r in results:
@@ -286,24 +314,61 @@ def generate_pdf(results, summary, grand_total, loss, final_profit):
     buffer.seek(0)
     return buffer
 
+def generate_pdf_detailed(detailed_data, total_net_profit_all):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+    styles = getSampleStyleSheet()
+    story = []
+    story.append(Paragraph("Profit Calculator Results (Full Order Payouts)", styles['Title']))
+    story.append(Spacer(1, 12))
+
+    for item in detailed_data:
+        story.append(Paragraph(f"Category: {item['category']}", styles['Heading2']))
+        story.append(Spacer(1, 4))
+        # Payouts list
+        payouts_data = [["Order Payouts"]]
+        for p in item['payouts']:
+            payouts_data.append([f"{p:.2f}"])
+        t = Table(payouts_data, colWidths=[100])
+        t.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 1, colors.black)]))
+        story.append(t)
+        story.append(Spacer(1, 6))
+        summary_data = [
+            ["Total Orders", str(item['count'])],
+            ["Total Payout", f"{item['sum_payouts']:.2f}"],
+            ["Cost per unit", f"{item['cost']:.2f}"],
+            ["Net Profit", f"{item['net_profit']:.2f}"]
+        ]
+        t2 = Table(summary_data, colWidths=[150, 100])
+        t2.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.grey),
+                                ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+                                ('ALIGN', (1,0), (1,-1), 'RIGHT'),
+                                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+                                ('BOTTOMPADDING', (0,0), (-1,0), 6),
+                                ('GRID', (0,0), (-1,-1), 1, colors.black)]))
+        story.append(t2)
+        story.append(Spacer(1, 12))
+
+    story.append(Paragraph(f"Grand Total Net Profit (all products): {total_net_profit_all:.2f}", styles['Heading1']))
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
+
 # ---------- Flask Routes ----------
 @app.route('/', methods=['GET', 'POST'])
 def index():
     products = load_products()
     if request.method == 'POST':
         files = request.files.getlist('files')
-        action = request.form.get('action')   # 'calculate' or 'calculate_full'
+        action = request.form.get('action')
 
-        # Common processing for both modes
         results = []
         grand_total = 0.0
         filenames = []
         summary = defaultdict(lambda: {'total_orders': 0, 'total_positive': 0.0, 'total_negative': 0.0,
                                        'net_payout': 0.0, 'gross_profit': 0.0, 'net_profit': 0.0})
-
-        # For full detail mode: collect per-product order payouts
-        detailed_orders = defaultdict(list)   # category -> list of net payouts
-        detailed_costs = {}                    # category -> cost
+        detailed_orders = defaultdict(list)
+        detailed_costs = {}
 
         for f in files:
             if f.filename.endswith('.csv'):
@@ -315,7 +380,6 @@ def index():
                     continue
                 filenames.append(f.filename)
 
-                # --- Populate summary (for 'calculate' mode) ---
                 pos_formatted = {}
                 neg_formatted = {}
                 for cat, vals in result['positive_payouts'].items():
@@ -328,17 +392,13 @@ def index():
                 for cat, profit in result['category_positive_profit'].items():
                     summary[cat]['gross_profit'] += profit
 
-                # --- Populate detailed_orders (for 'calculate_full' mode) ---
-                # We need all orders (positive and negative) per category
                 for cat, vals in result['positive_payouts'].items():
                     detailed_orders[cat].extend(vals)
                 for cat, vals in result['negative_payouts'].items():
                     detailed_orders[cat].extend(vals)
-                # Also store costs for each category (from products)
                 for cat in result['category_positive_profit'].keys():
                     detailed_costs[cat] = get_cost(cat, products)
 
-                # Store per-file results for summary display
                 results.append({
                     'filename': f.filename,
                     'period': result['period'],
@@ -353,7 +413,6 @@ def index():
                 })
                 grand_total += result['net_profit']
 
-        # After processing all files, compute summary totals and net profits
         for cat in summary:
             summary[cat]['net_payout'] = summary[cat]['total_positive'] + summary[cat]['total_negative']
             summary[cat]['net_profit'] = summary[cat]['gross_profit'] + summary[cat]['total_negative']
@@ -361,19 +420,16 @@ def index():
         loss = grand_total * 0.05
         final_profit = grand_total - loss
 
-        # Store session data for exports (summary mode only)
-        session['results_data'] = {
+        # Store both summary and detailed data in session for export
+        session['summary_data'] = {
             'results': results,
             'summary': dict(summary),
             'grand_total': grand_total,
             'loss': loss,
             'final_profit': final_profit
         }
-        session.modified = True
 
-        # Decide which view to render
         if action == 'calculate_full':
-            # Build detailed view data
             detailed_data = []
             total_net_profit_all = 0.0
             for cat, payouts in detailed_orders.items():
@@ -385,14 +441,17 @@ def index():
                 detailed_data.append({
                     'category': cat,
                     'count': count,
-                    'payouts': payouts,          # list of net amounts (positive/negative)
+                    'payouts': payouts,
                     'sum_payouts': sum_payouts,
                     'cost': cost,
                     'net_profit': net_profit
                 })
-            # Sort by category name
             detailed_data.sort(key=lambda x: x['category'])
-
+            session['detailed_data'] = {
+                'detailed_data': detailed_data,
+                'total_net_profit_all': total_net_profit_all
+            }
+            session.modified = True
             return render_template_string(
                 HTML_TEMPLATE,
                 results=None,
@@ -405,11 +464,11 @@ def index():
                 has_results=False,
                 detailed_data=detailed_data,
                 total_net_profit_all=total_net_profit_all,
-                action='calculate_full'
+                action='calculate_full',
+                has_detailed=True
             )
-
         else:
-            # Default 'calculate' mode – show summary
+            session.modified = True
             return render_template_string(
                 HTML_TEMPLATE,
                 results=results,
@@ -422,42 +481,41 @@ def index():
                 has_results=True,
                 detailed_data=None,
                 total_net_profit_all=None,
-                action='calculate'
+                action='calculate',
+                has_detailed=False
             )
 
-    # GET request – show empty form
     return render_template_string(HTML_TEMPLATE, results=None, files=None, products=products, summary=None,
                                    grand_total=None, loss=None, final_profit=None, has_results=False,
-                                   detailed_data=None, total_net_profit_all=None, action=None)
+                                   detailed_data=None, total_net_profit_all=None, action=None, has_detailed=False)
 
 # ---------- Export routes ----------
 @app.route('/export/excel')
 def export_excel():
-    data = session.get('results_data')
-    if not data:
+    # Check if detailed data exists first
+    if session.get('detailed_data'):
+        data = session['detailed_data']
+        output = generate_excel_detailed(data['detailed_data'], data['total_net_profit_all'])
+        return send_file(output, as_attachment=True, download_name='full_order_payouts.xlsx', mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    elif session.get('summary_data'):
+        data = session['summary_data']
+        output = generate_excel_summary(data['results'], data['summary'], data['grand_total'], data['loss'], data['final_profit'])
+        return send_file(output, as_attachment=True, download_name='profit_summary.xlsx', mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    else:
         return "No results to export. Please calculate first.", 400
-    output = generate_excel(
-        data['results'],
-        data['summary'],
-        data['grand_total'],
-        data['loss'],
-        data['final_profit']
-    )
-    return send_file(output, as_attachment=True, download_name='profit_results.xlsx', mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 @app.route('/export/pdf')
 def export_pdf():
-    data = session.get('results_data')
-    if not data:
+    if session.get('detailed_data'):
+        data = session['detailed_data']
+        output = generate_pdf_detailed(data['detailed_data'], data['total_net_profit_all'])
+        return send_file(output, as_attachment=True, download_name='full_order_payouts.pdf', mimetype='application/pdf')
+    elif session.get('summary_data'):
+        data = session['summary_data']
+        output = generate_pdf_summary(data['results'], data['summary'], data['grand_total'], data['loss'], data['final_profit'])
+        return send_file(output, as_attachment=True, download_name='profit_summary.pdf', mimetype='application/pdf')
+    else:
         return "No results to export. Please calculate first.", 400
-    output = generate_pdf(
-        data['results'],
-        data['summary'],
-        data['grand_total'],
-        data['loss'],
-        data['final_profit']
-    )
-    return send_file(output, as_attachment=True, download_name='profit_results.pdf', mimetype='application/pdf')
 
 # ---------- Product management routes ----------
 @app.route('/update_cost', methods=['POST'])
@@ -518,7 +576,7 @@ def add_product():
     save_products(products)
     return jsonify({'success': True})
 
-# ---------- HTML Template (with two buttons) ----------
+# ---------- HTML Template ----------
 HTML_TEMPLATE = '''
 <!DOCTYPE html>
 <html>
@@ -749,6 +807,12 @@ HTML_TEMPLATE = '''
             <div class="final-profit" style="margin-top: 20px;">
                 <div>Grand Total Net Profit (all products)</div>
                 <div class="amount">{{ "%.2f"|format(total_net_profit_all) }}</div>
+            </div>
+
+            <!-- Export buttons for detailed view -->
+            <div class="export-buttons">
+                <a href="{{ url_for('export_excel') }}" class="btn btn-success btn-lg">📥 Download Excel</a>
+                <a href="{{ url_for('export_pdf') }}" class="btn btn-danger btn-lg">📥 Download PDF</a>
             </div>
         </div>
     </div>
