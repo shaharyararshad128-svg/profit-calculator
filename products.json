@@ -1,0 +1,50 @@
+{
+    "2-in-1 Card Reader": {
+        "cost": 170,
+        "keywords": [
+            "2 In1"
+        ]
+    },
+    "3-in-1 Card Reader": {
+        "cost": 170,
+        "keywords": [
+            "Memory Card Reader"
+        ]
+    },
+    "Circuit Breaker": {
+        "cost": 1700,
+        "keywords": [
+            "Circuit Breaker"
+        ]
+    },
+    "Smart Plug": {
+        "cost": 1100,
+        "keywords": [
+            "Smart Socket"
+        ]
+    },
+    "Otg": {
+        "cost": 170,
+        "keywords": [
+            "otg adapter"
+        ]
+    },
+    "Stylus Pen": {
+        "cost": 650,
+        "keywords": [
+            "Stylus Pen"
+        ]
+    },
+    "2 in 1 Stylus Pen": {
+        "cost": 100,
+        "keywords": [
+            "Stylus"
+        ]
+    },
+    "Cheap Stylus": {
+        "cost": 100,
+        "keywords": [
+            "Stylus"
+        ]
+    }
+}
