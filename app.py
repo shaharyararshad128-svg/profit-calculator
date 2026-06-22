@@ -26,7 +26,6 @@ DEFAULT_PRODUCTS = {
     'Otg Adapter': {'cost': 170, 'keywords': ['Otg Adapter', 'OTG']},
 }
 
-# ---------- Store Name Mapping ----------
 STORE_MAP = {
     'PK2NBYJ4S19': 'Global Gadgets',
     'PK2NBXPB2G6': 'Na Imports',
@@ -45,7 +44,6 @@ def save_products(products):
     with open(PRODUCTS_FILE, 'w') as f:
         json.dump(products, f, indent=4)
 
-# ---------- Helper functions ----------
 def categorize(product_name, price_paid, net, products):
     if net < 0:
         return 'Other'
@@ -226,8 +224,18 @@ def generate_excel_detailed(detailed_data, total_net_profit_all):
         row += 1
         ws.cell(row=row, column=1, value="Net Profit: " + str(round(item['net_profit'], 2)))
         row += 2
-    ws.cell(row=row, column=1, value="Grand Total Net Profit (all products)")
+    # Add 5% deduction and final net profit
+    loss = total_net_profit_all * 0.05
+    final_profit = total_net_profit_all - loss
+    ws.cell(row=row, column=1, value="Grand Total Net Profit (before 5%)")
     ws.cell(row=row, column=2, value=round(total_net_profit_all, 2))
+    row += 1
+    ws.cell(row=row, column=1, value="Less 5% loss")
+    ws.cell(row=row, column=2, value=round(loss, 2))
+    row += 1
+    ws.cell(row=row, column=1, value="FINAL NET PROFIT")
+    ws.cell(row=row, column=2, value=round(final_profit, 2))
+
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)
@@ -325,7 +333,6 @@ def generate_pdf_detailed(detailed_data, total_net_profit_all):
     for item in detailed_data:
         story.append(Paragraph(f"Category: {item['category']}", styles['Heading2']))
         story.append(Spacer(1, 4))
-        # Payouts list
         payouts_data = [["Order Payouts"]]
         for p in item['payouts']:
             payouts_data.append([f"{p:.2f}"])
@@ -349,7 +356,13 @@ def generate_pdf_detailed(detailed_data, total_net_profit_all):
         story.append(t2)
         story.append(Spacer(1, 12))
 
-    story.append(Paragraph(f"Grand Total Net Profit (all products): {total_net_profit_all:.2f}", styles['Heading1']))
+    # Apply 5% loss to grand total
+    loss = total_net_profit_all * 0.05
+    final_profit = total_net_profit_all - loss
+    story.append(Paragraph(f"Grand Total Net Profit (before 5%): {total_net_profit_all:.2f}", styles['Heading3']))
+    story.append(Paragraph(f"Less 5% loss: -{loss:.2f}", styles['Heading3']))
+    story.append(Paragraph(f"FINAL NET PROFIT: {final_profit:.2f}", styles['Heading2']))
+
     doc.build(story)
     buffer.seek(0)
     return buffer
@@ -420,7 +433,6 @@ def index():
         loss = grand_total * 0.05
         final_profit = grand_total - loss
 
-        # Store both summary and detailed data in session for export
         session['summary_data'] = {
             'results': results,
             'summary': dict(summary),
@@ -492,7 +504,6 @@ def index():
 # ---------- Export routes ----------
 @app.route('/export/excel')
 def export_excel():
-    # Check if detailed data exists first
     if session.get('detailed_data'):
         data = session['detailed_data']
         output = generate_excel_detailed(data['detailed_data'], data['total_net_profit_all'])
@@ -576,7 +587,7 @@ def add_product():
     save_products(products)
     return jsonify({'success': True})
 
-# ---------- HTML Template ----------
+# ---------- HTML Template (same as before) ----------
 HTML_TEMPLATE = '''
 <!DOCTYPE html>
 <html>
@@ -805,8 +816,12 @@ HTML_TEMPLATE = '''
             </div>
             {% endfor %}
             <div class="final-profit" style="margin-top: 20px;">
-                <div>Grand Total Net Profit (all products)</div>
+                <div>Grand Total Net Profit (before 5%)</div>
                 <div class="amount">{{ "%.2f"|format(total_net_profit_all) }}</div>
+                {% set loss_detailed = total_net_profit_all * 0.05 %}
+                {% set final_profit_detailed = total_net_profit_all - loss_detailed %}
+                <div>Less 5% loss: -{{ "%.2f"|format(loss_detailed) }}</div>
+                <div style="font-size: 1.8rem; margin-top: 10px;">💰 FINAL NET PROFIT: {{ "%.2f"|format(final_profit_detailed) }}</div>
             </div>
 
             <!-- Export buttons for detailed view -->
@@ -821,7 +836,7 @@ HTML_TEMPLATE = '''
 </div>
 
 <script>
-    // Product management JavaScript (unchanged)
+    // JavaScript unchanged
     document.querySelectorAll('.edit-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             const idx = this.dataset.index;
