@@ -12,7 +12,8 @@ from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
 
 app = Flask(__name__)
-app.secret_key = 'your-secret-key-here'  # Change this for production
+# Use a fixed secret key (change this to a random string in production)
+app.secret_key = 'your-secret-key-here'  # For production, set a long random string
 
 PRODUCTS_FILE = 'products.json'
 
@@ -24,7 +25,6 @@ DEFAULT_PRODUCTS = {
     'Circuit Breaker': {'cost': 1800, 'keywords': ['Circuit Breaker']},
     'Smart Plug': {'cost': 1100, 'keywords': ['Smart Socket']},
     'Otg Adapter': {'cost': 170, 'keywords': ['Otg Adapter', 'OTG']},
-    'Labubu Doll': {'cost': 900, 'keywords': ['Labubu']},
 }
 
 # ---------- Store Name Mapping ----------
@@ -347,6 +347,7 @@ def index():
             'loss': loss,
             'final_profit': final_profit
         }
+        session.modified = True   # <-- This line ensures session is saved
 
         return render_template_string(
             HTML_TEMPLATE,
