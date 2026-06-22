@@ -44,6 +44,7 @@ def save_products(products):
     with open(PRODUCTS_FILE, 'w') as f:
         json.dump(products, f, indent=4)
 
+# ---------- Helper functions ----------
 def categorize(product_name, price_paid, net, products):
     if net < 0:
         return 'Other'
@@ -224,7 +225,6 @@ def generate_excel_detailed(detailed_data, total_net_profit_all):
         row += 1
         ws.cell(row=row, column=1, value="Net Profit: " + str(round(item['net_profit'], 2)))
         row += 2
-    # Add 5% deduction and final net profit
     loss = total_net_profit_all * 0.05
     final_profit = total_net_profit_all - loss
     ws.cell(row=row, column=1, value="Grand Total Net Profit (before 5%)")
@@ -356,7 +356,6 @@ def generate_pdf_detailed(detailed_data, total_net_profit_all):
         story.append(t2)
         story.append(Spacer(1, 12))
 
-    # Apply 5% loss to grand total
     loss = total_net_profit_all * 0.05
     final_profit = total_net_profit_all - loss
     story.append(Paragraph(f"Grand Total Net Profit (before 5%): {total_net_profit_all:.2f}", styles['Heading3']))
@@ -587,7 +586,7 @@ def add_product():
     save_products(products)
     return jsonify({'success': True})
 
-# ---------- HTML Template (same as before) ----------
+# ---------- HTML Template ----------
 HTML_TEMPLATE = '''
 <!DOCTYPE html>
 <html>
@@ -836,7 +835,7 @@ HTML_TEMPLATE = '''
 </div>
 
 <script>
-    // JavaScript unchanged
+    // JavaScript unchanged (product management)
     document.querySelectorAll('.edit-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             const idx = this.dataset.index;
