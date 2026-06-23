@@ -6,10 +6,11 @@ import json
 import io
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill
-from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
 from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-here'  # Change for production
@@ -245,38 +246,56 @@ def generate_pdf_summary(results, summary, grand_total, loss, final_profit):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
     styles = getSampleStyleSheet()
+    # Custom styles
+    title_style = ParagraphStyle('TitleStyle', parent=styles['Title'], alignment=TA_CENTER, fontSize=18)
+    heading_style = ParagraphStyle('HeadingStyle', parent=styles['Heading2'], alignment=TA_LEFT, fontSize=14)
+    normal_style = styles['Normal']
     story = []
-    story.append(Paragraph("Profit Calculator Results (Summary)", styles['Title']))
+
+    # Title
+    story.append(Paragraph("Profit Calculator – Summary Report", title_style))
     story.append(Spacer(1, 12))
 
+    # Loop through each file
     for r in results:
-        story.append(Paragraph(f"File: {r['filename']}", styles['Heading2']))
-        story.append(Paragraph(f"Period: {r['period']}   |   Store: {r['store']}", styles['Normal']))
+        story.append(Paragraph(f"File: {r['filename']}", heading_style))
+        story.append(Paragraph(f"Period: {r['period']}   |   Store: {r['store']}", normal_style))
         story.append(Spacer(1, 6))
+
+        # Positive payouts table
         data = [["Positive Payouts", "Orders", "Total"]]
         for cat, d in r['positive'].items():
             data.append([cat, str(d['count']), f"{d['total']:.2f}"])
         t = Table(data, colWidths=[180, 80, 100])
-        t.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.grey),
-                               ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
-                               ('ALIGN', (2,0), (2,-1), 'RIGHT'),
-                               ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-                               ('BOTTOMPADDING', (0,0), (-1,0), 6),
-                               ('GRID', (0,0), (-1,-1), 1, colors.black)]))
+        t.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.grey),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+            ('ALIGN', (2,0), (2,-1), 'RIGHT'),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            ('BOTTOMPADDING', (0,0), (-1,0), 6),
+            ('GRID', (0,0), (-1,-1), 1, colors.black),
+            ('FONTNAME', (1,1), (-1,-1), 'Helvetica'),
+        ]))
         story.append(t)
         story.append(Spacer(1, 6))
+
+        # Negative payouts table
         data2 = [["Negative Payouts", "Orders", "Total"]]
         for cat, d in r['negative'].items():
             data2.append([cat, str(d['count']), f"{d['total']:.2f}"])
         t2 = Table(data2, colWidths=[180, 80, 100])
-        t2.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.grey),
-                                ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
-                                ('ALIGN', (2,0), (2,-1), 'RIGHT'),
-                                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-                                ('BOTTOMPADDING', (0,0), (-1,0), 6),
-                                ('GRID', (0,0), (-1,-1), 1, colors.black)]))
+        t2.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.grey),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+            ('ALIGN', (2,0), (2,-1), 'RIGHT'),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            ('BOTTOMPADDING', (0,0), (-1,0), 6),
+            ('GRID', (0,0), (-1,-1), 1, colors.black),
+        ]))
         story.append(t2)
         story.append(Spacer(1, 6))
+
+        # Gross profit and totals
         data3 = [["Gross Profit (after cost)", "Amount"]]
         for cat, profit in r['profits'].items():
             data3.append([cat, f"{profit:.2f}"])
@@ -285,38 +304,47 @@ def generate_pdf_summary(results, summary, grand_total, loss, final_profit):
         data3.append(["Total Payout (before cost)", f"{r['total_payout']:.2f}"])
         data3.append(["Net Profit (after cost)", f"{r['net_profit']:.2f}"])
         t3 = Table(data3, colWidths=[250, 100])
-        t3.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.grey),
-                                ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
-                                ('ALIGN', (1,0), (1,-1), 'RIGHT'),
-                                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-                                ('BOTTOMPADDING', (0,0), (-1,0), 6),
-                                ('GRID', (0,0), (-1,-1), 1, colors.black)]))
+        t3.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.grey),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+            ('ALIGN', (1,0), (1,-1), 'RIGHT'),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            ('BOTTOMPADDING', (0,0), (-1,0), 6),
+            ('GRID', (0,0), (-1,-1), 1, colors.black),
+        ]))
         story.append(t3)
         story.append(Spacer(1, 12))
 
-    story.append(Paragraph("Summary by Product", styles['Heading1']))
+    # Product summary
+    story.append(Paragraph("Summary by Product (all files)", heading_style))
     story.append(Spacer(1, 6))
     data4 = [["Product", "Orders", "Positive", "Negative", "Net Payout", "Gross Profit", "Net Profit"]]
     for cat, agg in summary.items():
-        data4.append([cat, str(agg['total_orders']),
-                      f"{agg['total_positive']:.2f}",
-                      f"{agg['total_negative']:.2f}",
-                      f"{agg['net_payout']:.2f}",
-                      f"{agg['gross_profit']:.2f}",
-                      f"{agg['net_profit']:.2f}"])
-    t4 = Table(data4, colWidths=[120, 50, 80, 80, 80, 80, 80])
-    t4.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.grey),
-                            ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
-                            ('ALIGN', (1,0), (-1,-1), 'RIGHT'),
-                            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-                            ('BOTTOMPADDING', (0,0), (-1,0), 6),
-                            ('GRID', (0,0), (-1,-1), 1, colors.black)]))
+        data4.append([
+            cat,
+            str(agg['total_orders']),
+            f"{agg['total_positive']:.2f}",
+            f"{agg['total_negative']:.2f}",
+            f"{agg['net_payout']:.2f}",
+            f"{agg['gross_profit']:.2f}",
+            f"{agg['net_profit']:.2f}"
+        ])
+    t4 = Table(data4, colWidths=[100, 50, 70, 70, 70, 70, 70])
+    t4.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.grey),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+        ('ALIGN', (1,0), (-1,-1), 'RIGHT'),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('BOTTOMPADDING', (0,0), (-1,0), 6),
+        ('GRID', (0,0), (-1,-1), 1, colors.black),
+    ]))
     story.append(t4)
     story.append(Spacer(1, 12))
 
-    story.append(Paragraph(f"Grand Total Net Profit (before 5%): {grand_total:.2f}", styles['Heading3']))
-    story.append(Paragraph(f"Less 5% loss: -{loss:.2f}", styles['Heading3']))
-    story.append(Paragraph(f"FINAL NET PROFIT: {final_profit:.2f}", styles['Heading2']))
+    # Final totals
+    story.append(Paragraph(f"Grand Total Net Profit (before 5%): {grand_total:.2f}", heading_style))
+    story.append(Paragraph(f"Less 5% loss: -{loss:.2f}", normal_style))
+    story.append(Paragraph(f"FINAL NET PROFIT: {final_profit:.2f}", title_style))
 
     doc.build(story)
     buffer.seek(0)
@@ -326,18 +354,26 @@ def generate_pdf_detailed(detailed_data, total_net_profit_all):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
     styles = getSampleStyleSheet()
+    title_style = ParagraphStyle('TitleStyle', parent=styles['Title'], alignment=TA_CENTER, fontSize=18)
+    heading_style = ParagraphStyle('HeadingStyle', parent=styles['Heading2'], alignment=TA_LEFT, fontSize=14)
+    normal_style = styles['Normal']
     story = []
-    story.append(Paragraph("Profit Calculator Results (Full Order Payouts)", styles['Title']))
+
+    story.append(Paragraph("Profit Calculator – Detailed Order Payouts", title_style))
     story.append(Spacer(1, 12))
 
     for item in detailed_data:
-        story.append(Paragraph(f"Category: {item['category']}", styles['Heading2']))
+        story.append(Paragraph(f"Category: {item['category']}", heading_style))
         story.append(Spacer(1, 4))
+        # Payouts list as a table
         payouts_data = [["Order Payouts"]]
         for p in item['payouts']:
             payouts_data.append([f"{p:.2f}"])
         t = Table(payouts_data, colWidths=[100])
-        t.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 1, colors.black)]))
+        t.setStyle(TableStyle([
+            ('GRID', (0,0), (-1,-1), 1, colors.black),
+            ('FONTNAME', (1,0), (-1,-1), 'Helvetica'),
+        ]))
         story.append(t)
         story.append(Spacer(1, 6))
         summary_data = [
@@ -347,20 +383,23 @@ def generate_pdf_detailed(detailed_data, total_net_profit_all):
             ["Net Profit", f"{item['net_profit']:.2f}"]
         ]
         t2 = Table(summary_data, colWidths=[150, 100])
-        t2.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.grey),
-                                ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
-                                ('ALIGN', (1,0), (1,-1), 'RIGHT'),
-                                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-                                ('BOTTOMPADDING', (0,0), (-1,0), 6),
-                                ('GRID', (0,0), (-1,-1), 1, colors.black)]))
+        t2.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.grey),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+            ('ALIGN', (1,0), (1,-1), 'RIGHT'),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            ('BOTTOMPADDING', (0,0), (-1,0), 6),
+            ('GRID', (0,0), (-1,-1), 1, colors.black),
+        ]))
         story.append(t2)
         story.append(Spacer(1, 12))
 
+    # Final totals with 5% deduction
     loss = total_net_profit_all * 0.05
     final_profit = total_net_profit_all - loss
-    story.append(Paragraph(f"Grand Total Net Profit (before 5%): {total_net_profit_all:.2f}", styles['Heading3']))
-    story.append(Paragraph(f"Less 5% loss: -{loss:.2f}", styles['Heading3']))
-    story.append(Paragraph(f"FINAL NET PROFIT: {final_profit:.2f}", styles['Heading2']))
+    story.append(Paragraph(f"Grand Total Net Profit (before 5%): {total_net_profit_all:.2f}", heading_style))
+    story.append(Paragraph(f"Less 5% loss: -{loss:.2f}", normal_style))
+    story.append(Paragraph(f"FINAL NET PROFIT: {final_profit:.2f}", title_style))
 
     doc.build(story)
     buffer.seek(0)
@@ -569,6 +608,11 @@ def undo_delete():
         save_products(products)
     return redirect('/')
 
+@app.route('/clear_undo', methods=['POST'])
+def clear_undo():
+    session.pop('deleted_product', None)
+    return jsonify({'success': True})
+
 @app.route('/add_product', methods=['POST'])
 def add_product():
     data = request.json
@@ -586,7 +630,7 @@ def add_product():
     save_products(products)
     return jsonify({'success': True})
 
-# ---------- HTML Template ----------
+# ---------- HTML Template (unchanged except undo alert fix) ----------
 HTML_TEMPLATE = '''
 <!DOCTYPE html>
 <html>
@@ -631,7 +675,7 @@ HTML_TEMPLATE = '''
 
     <!-- Undo deletion alert -->
     {% if session.deleted_product %}
-    <div class="alert alert-warning alert-dismissible fade show" role="alert">
+    <div id="undo-alert" class="alert alert-warning alert-dismissible fade show" role="alert">
         <strong>Product "{{ session.deleted_product.category }}" deleted.</strong>
         <a href="{{ url_for('undo_delete') }}" class="btn btn-sm btn-outline-dark ms-2">↩ Undo</a>
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
@@ -835,7 +879,17 @@ HTML_TEMPLATE = '''
 </div>
 
 <script>
-    // JavaScript unchanged (product management)
+    // Clear undo session when alert is closed
+    document.addEventListener('DOMContentLoaded', function() {
+        var undoAlert = document.getElementById('undo-alert');
+        if (undoAlert) {
+            undoAlert.addEventListener('closed.bs.alert', function () {
+                fetch('/clear_undo', { method: 'POST' });
+            });
+        }
+    });
+
+    // Product management JavaScript (unchanged)
     document.querySelectorAll('.edit-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             const idx = this.dataset.index;
