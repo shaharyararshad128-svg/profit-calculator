@@ -6,8 +6,8 @@ import json
 import io
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill
-from reportlab.lib.pagesizes import A4, landscape
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+from reportlab.lib.pagesizes import A4
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
@@ -132,7 +132,7 @@ def process_file(filepath):
         'net_profit': net_profit,
     }, None
 
-# ---------- Export functions ----------
+# ---------- Export functions (unchanged) ----------
 def generate_excel_summary(results, summary, grand_total, loss, final_profit):
     wb = Workbook()
     wb.remove(wb.active)
@@ -246,23 +246,17 @@ def generate_pdf_summary(results, summary, grand_total, loss, final_profit):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
     styles = getSampleStyleSheet()
-    # Custom styles
     title_style = ParagraphStyle('TitleStyle', parent=styles['Title'], alignment=TA_CENTER, fontSize=18)
     heading_style = ParagraphStyle('HeadingStyle', parent=styles['Heading2'], alignment=TA_LEFT, fontSize=14)
     normal_style = styles['Normal']
     story = []
-
-    # Title
     story.append(Paragraph("Profit Calculator – Summary Report", title_style))
     story.append(Spacer(1, 12))
 
-    # Loop through each file
     for r in results:
         story.append(Paragraph(f"File: {r['filename']}", heading_style))
         story.append(Paragraph(f"Period: {r['period']}   |   Store: {r['store']}", normal_style))
         story.append(Spacer(1, 6))
-
-        # Positive payouts table
         data = [["Positive Payouts", "Orders", "Total"]]
         for cat, d in r['positive'].items():
             data.append([cat, str(d['count']), f"{d['total']:.2f}"])
@@ -274,12 +268,9 @@ def generate_pdf_summary(results, summary, grand_total, loss, final_profit):
             ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
             ('BOTTOMPADDING', (0,0), (-1,0), 6),
             ('GRID', (0,0), (-1,-1), 1, colors.black),
-            ('FONTNAME', (1,1), (-1,-1), 'Helvetica'),
         ]))
         story.append(t)
         story.append(Spacer(1, 6))
-
-        # Negative payouts table
         data2 = [["Negative Payouts", "Orders", "Total"]]
         for cat, d in r['negative'].items():
             data2.append([cat, str(d['count']), f"{d['total']:.2f}"])
@@ -294,8 +285,6 @@ def generate_pdf_summary(results, summary, grand_total, loss, final_profit):
         ]))
         story.append(t2)
         story.append(Spacer(1, 6))
-
-        # Gross profit and totals
         data3 = [["Gross Profit (after cost)", "Amount"]]
         for cat, profit in r['profits'].items():
             data3.append([cat, f"{profit:.2f}"])
@@ -315,7 +304,6 @@ def generate_pdf_summary(results, summary, grand_total, loss, final_profit):
         story.append(t3)
         story.append(Spacer(1, 12))
 
-    # Product summary
     story.append(Paragraph("Summary by Product (all files)", heading_style))
     story.append(Spacer(1, 6))
     data4 = [["Product", "Orders", "Positive", "Negative", "Net Payout", "Gross Profit", "Net Profit"]]
@@ -341,7 +329,6 @@ def generate_pdf_summary(results, summary, grand_total, loss, final_profit):
     story.append(t4)
     story.append(Spacer(1, 12))
 
-    # Final totals
     story.append(Paragraph(f"Grand Total Net Profit (before 5%): {grand_total:.2f}", heading_style))
     story.append(Paragraph(f"Less 5% loss: -{loss:.2f}", normal_style))
     story.append(Paragraph(f"FINAL NET PROFIT: {final_profit:.2f}", title_style))
@@ -358,21 +345,18 @@ def generate_pdf_detailed(detailed_data, total_net_profit_all):
     heading_style = ParagraphStyle('HeadingStyle', parent=styles['Heading2'], alignment=TA_LEFT, fontSize=14)
     normal_style = styles['Normal']
     story = []
-
     story.append(Paragraph("Profit Calculator – Detailed Order Payouts", title_style))
     story.append(Spacer(1, 12))
 
     for item in detailed_data:
         story.append(Paragraph(f"Category: {item['category']}", heading_style))
         story.append(Spacer(1, 4))
-        # Payouts list as a table
         payouts_data = [["Order Payouts"]]
         for p in item['payouts']:
             payouts_data.append([f"{p:.2f}"])
         t = Table(payouts_data, colWidths=[100])
         t.setStyle(TableStyle([
             ('GRID', (0,0), (-1,-1), 1, colors.black),
-            ('FONTNAME', (1,0), (-1,-1), 'Helvetica'),
         ]))
         story.append(t)
         story.append(Spacer(1, 6))
@@ -394,7 +378,6 @@ def generate_pdf_detailed(detailed_data, total_net_profit_all):
         story.append(t2)
         story.append(Spacer(1, 12))
 
-    # Final totals with 5% deduction
     loss = total_net_profit_all * 0.05
     final_profit = total_net_profit_all - loss
     story.append(Paragraph(f"Grand Total Net Profit (before 5%): {total_net_profit_all:.2f}", heading_style))
@@ -630,7 +613,7 @@ def add_product():
     save_products(products)
     return jsonify({'success': True})
 
-# ---------- HTML Template (unchanged except undo alert fix) ----------
+# ---------- HTML Template (new advanced UI) ----------
 HTML_TEMPLATE = '''
 <!DOCTYPE html>
 <html>
@@ -639,107 +622,277 @@ HTML_TEMPLATE = '''
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Profit Calculator</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        body { background: #f0f2f5; padding: 20px; }
-        .card { border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); margin-bottom: 20px; }
-        .card-header { background: #fff; border-bottom: 1px solid #eee; font-weight: bold; }
-        .product-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f0f0f0; }
-        .product-item:last-child { border-bottom: none; }
-        .cost-input { width: 80px; display: inline-block; }
-        .result-box { background: #f8f9fa; border-radius: 12px; padding: 15px; margin-bottom: 15px; }
-        .result-box h5 { margin-top: 0; }
+        body {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .main-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header-card {
+            background: linear-gradient(135deg, #2c3e50, #3498db);
+            color: white;
+            border-radius: 20px;
+            padding: 30px 30px 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        .header-card h1 {
+            font-weight: 300;
+            font-size: 2.5rem;
+        }
+        .header-card .subtitle {
+            opacity: 0.8;
+            font-size: 1rem;
+            margin-top: -5px;
+        }
+        .modern-card {
+            background: rgba(255,255,255,0.9);
+            backdrop-filter: blur(10px);
+            border: none;
+            border-radius: 20px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            margin-bottom: 25px;
+            padding: 25px;
+        }
+        .modern-card .card-header {
+            background: transparent;
+            border-bottom: 1px solid #eee;
+            padding: 0 0 15px 0;
+            font-weight: 600;
+            font-size: 1.2rem;
+            color: #2c3e50;
+        }
+        .btn-modern {
+            border-radius: 50px;
+            padding: 10px 28px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+        .btn-modern:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+        }
+        .btn-toggle-products {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 50px;
+            font-size: 0.9rem;
+        }
+        .btn-toggle-products:hover {
+            background: #5a6268;
+            color: white;
+        }
+        .product-panel {
+            display: none;
+        }
+        .product-panel.show {
+            display: block;
+        }
+        .result-box {
+            background: #f8f9fa;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 4px solid #3498db;
+        }
+        .result-box h5 {
+            margin-top: 0;
+            font-weight: 600;
+        }
         .positive { color: #28a745; }
         .negative { color: #dc3545; }
         .total-profit { font-size: 1.2rem; font-weight: bold; }
-        .final-profit { background: #2c3e50; color: white; padding: 20px; border-radius: 16px; text-align: center; margin-top: 20px; }
+        .final-profit {
+            background: linear-gradient(135deg, #2c3e50, #1a252f);
+            color: white;
+            padding: 25px;
+            border-radius: 16px;
+            text-align: center;
+            margin-top: 20px;
+        }
         .final-profit .amount { font-size: 2.5rem; font-weight: bold; }
-        .btn-sm { font-size: 0.8rem; }
-        .keyword-badge { background: #e9ecef; padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; margin-left: 5px; }
-        .summary-box { background: #e8f4fd; border-radius: 12px; padding: 15px; margin-bottom: 10px; border-left: 4px solid #0d6efd; }
+        .keyword-badge {
+            background: #e9ecef;
+            padding: 2px 10px;
+            border-radius: 30px;
+            font-size: 0.7rem;
+            margin-left: 5px;
+            color: #495057;
+        }
+        .summary-box {
+            background: #e8f4fd;
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-left: 4px solid #0d6efd;
+        }
         .summary-box h6 { margin-top: 0; color: #0d6efd; }
-        .undo-btn { background: #ffc107; color: #000; border: none; padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; margin-left: 10px; }
-        .export-buttons { display: flex; gap: 10px; justify-content: center; margin-top: 15px; flex-wrap: wrap; }
-        .final-payout-box { background: #28a745; color: white; padding: 8px 16px; border-radius: 8px; display: inline-block; font-weight: bold; font-size: 1.4rem; }
-        .total-payout-box { background: #17a2b8; color: white; padding: 8px 16px; border-radius: 8px; display: inline-block; font-weight: bold; font-size: 1.2rem; }
-        .store-badge { background: #6c757d; color: white; padding: 4px 12px; border-radius: 20px; font-size: 0.9rem; }
-        .designer-credit { text-align: center; color: #6c757d; margin-top: -10px; margin-bottom: 20px; font-size: 0.9rem; }
-        .payout-list { max-height: 300px; overflow-y: auto; background: #f8f9fa; padding: 10px; border-radius: 8px; }
+        .payout-list {
+            max-height: 300px;
+            overflow-y: auto;
+            background: #fff;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
         .payout-item { font-family: monospace; }
-        .detail-summary { background: #e9ecef; padding: 10px; border-radius: 8px; margin-top: 10px; }
+        .detail-summary {
+            background: #e9ecef;
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+        .store-badge {
+            background: #6c757d;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 30px;
+            font-size: 0.85rem;
+        }
+        .file-input-wrapper {
+            border: 2px dashed #ced4da;
+            border-radius: 16px;
+            padding: 30px;
+            text-align: center;
+            transition: border 0.3s;
+        }
+        .file-input-wrapper:hover {
+            border-color: #3498db;
+        }
+        .file-input-wrapper input[type="file"] {
+            display: block;
+            width: 100%;
+            padding: 10px;
+        }
+        .export-buttons .btn {
+            border-radius: 50px;
+            padding: 12px 30px;
+            font-weight: 500;
+        }
+        .product-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .product-item:last-child { border-bottom: none; }
+        .cost-input { width: 80px; display: inline-block; }
+        .designer-credit {
+            text-align: center;
+            margin-top: 20px;
+            color: #6c757d;
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+        @media (max-width: 768px) {
+            .header-card h1 { font-size: 1.8rem; }
+            .modern-card { padding: 15px; }
+        }
     </style>
 </head>
 <body>
-<div class="container">
-    <h1 class="text-center mb-0">📊 Profit Calculator</h1>
-    <p class="designer-credit">Designed by Shahar Yar</p>
+<div class="main-container">
+
+    <!-- Header -->
+    <div class="header-card">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h1><i class="fas fa-chart-line me-2"></i>Profit Calculator</h1>
+                <div class="subtitle">Designed by Shahar Yar</div>
+            </div>
+            <div>
+                <button class="btn btn-toggle-products" id="toggleProductsBtn" onclick="toggleProductPanel()">
+                    <i class="fas fa-cog me-1"></i> Manage Products
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- Undo deletion alert -->
     {% if session.deleted_product %}
-    <div id="undo-alert" class="alert alert-warning alert-dismissible fade show" role="alert">
-        <strong>Product "{{ session.deleted_product.category }}" deleted.</strong>
-        <a href="{{ url_for('undo_delete') }}" class="btn btn-sm btn-outline-dark ms-2">↩ Undo</a>
+    <div id="undo-alert" class="alert alert-warning alert-dismissible fade show modern-card" role="alert" style="padding:15px 20px;">
+        <strong><i class="fas fa-undo me-1"></i> Product "{{ session.deleted_product.category }}" deleted.</strong>
+        <a href="{{ url_for('undo_delete') }}" class="btn btn-sm btn-outline-dark ms-2">Undo</a>
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
     {% endif %}
 
-    <!-- Product Management -->
-    <div class="card">
-        <div class="card-header">📦 Product Costs</div>
-        <div class="card-body">
-            <div id="product-list">
-                {% for cat, data in products.items() %}
-                <div class="product-item" data-category="{{ cat }}">
-                    <div>
-                        <strong>{{ cat }}</strong>
-                        <span class="keyword-badge">{{ data.keywords|join(', ') }}</span>
+    <!-- Product Management Panel (hidden by default) -->
+    <div id="productPanel" class="product-panel">
+        <div class="modern-card">
+            <div class="card-header"><i class="fas fa-box me-2"></i>Product Costs</div>
+            <div class="card-body">
+                <div id="product-list">
+                    {% for cat, data in products.items() %}
+                    <div class="product-item" data-category="{{ cat }}">
+                        <div>
+                            <strong>{{ cat }}</strong>
+                            <span class="keyword-badge">{{ data.keywords|join(', ') }}</span>
+                        </div>
+                        <div>
+                            <span id="cost-display-{{ loop.index }}">{{ "%.2f"|format(data.cost) }}</span>
+                            <input type="number" step="0.01" class="form-control form-control-sm cost-input d-none" id="cost-input-{{ loop.index }}" value="{{ data.cost }}">
+                            <button class="btn btn-sm btn-outline-primary edit-btn" data-index="{{ loop.index }}"><i class="fas fa-edit"></i></button>
+                            <button class="btn btn-sm btn-outline-danger delete-btn" data-category="{{ cat }}"><i class="fas fa-trash"></i></button>
+                            <button class="btn btn-sm btn-success save-btn d-none" data-index="{{ loop.index }}"><i class="fas fa-check"></i></button>
+                        </div>
                     </div>
-                    <div>
-                        <span id="cost-display-{{ loop.index }}">{{ "%.2f"|format(data.cost) }}</span>
-                        <input type="number" step="0.01" class="form-control form-control-sm cost-input d-none" id="cost-input-{{ loop.index }}" value="{{ data.cost }}">
-                        <button class="btn btn-sm btn-outline-primary edit-btn" data-index="{{ loop.index }}">Edit</button>
-                        <button class="btn btn-sm btn-outline-danger delete-btn" data-category="{{ cat }}">Delete</button>
-                        <button class="btn btn-sm btn-success save-btn d-none" data-index="{{ loop.index }}">Save</button>
+                    {% endfor %}
+                </div>
+                <hr>
+                <h6>Add New Product</h6>
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <input type="text" id="new-name" class="form-control" placeholder="Product Name">
+                    </div>
+                    <div class="col-md-3">
+                        <input type="number" step="0.01" id="new-cost" class="form-control" placeholder="Cost">
+                    </div>
+                    <div class="col-md-3">
+                        <input type="text" id="new-keyword" class="form-control" placeholder="Keyword (optional)">
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-primary w-100" id="add-product-btn"><i class="fas fa-plus"></i></button>
                     </div>
                 </div>
-                {% endfor %}
+                <div id="add-message" class="mt-2"></div>
             </div>
-            <hr>
-            <h6>Add New Product</h6>
-            <div class="row g-2">
-                <div class="col-md-4">
-                    <input type="text" id="new-name" class="form-control" placeholder="Product Name">
-                </div>
-                <div class="col-md-3">
-                    <input type="number" step="0.01" id="new-cost" class="form-control" placeholder="Cost">
-                </div>
-                <div class="col-md-3">
-                    <input type="text" id="new-keyword" class="form-control" placeholder="Keyword (optional)">
-                </div>
-                <div class="col-md-2">
-                    <button class="btn btn-primary w-100" id="add-product-btn">Add</button>
-                </div>
-            </div>
-            <div id="add-message" class="mt-2"></div>
         </div>
     </div>
 
-    <!-- File Upload -->
-    <div class="card">
-        <div class="card-header">📂 Upload CSV Files</div>
+    <!-- File Upload Card -->
+    <div class="modern-card">
+        <div class="card-header"><i class="fas fa-upload me-2"></i>Upload CSV Files</div>
         <div class="card-body">
             <form method="POST" enctype="multipart/form-data" id="upload-form">
-                <input type="file" name="files" multiple accept=".csv" class="form-control mb-2" required>
-                <div class="row g-2">
+                <div class="file-input-wrapper">
+                    <i class="fas fa-cloud-upload-alt fa-2x text-muted mb-2"></i>
+                    <input type="file" name="files" multiple accept=".csv" class="form-control" required>
+                </div>
+                <div class="row g-2 mt-3">
                     <div class="col-md-6">
-                        <button type="submit" name="action" value="calculate" class="btn btn-success w-100">Calculate</button>
+                        <button type="submit" name="action" value="calculate" class="btn btn-success btn-modern w-100">
+                            <i class="fas fa-calculator me-1"></i> Calculate
+                        </button>
                     </div>
                     <div class="col-md-6">
-                        <button type="submit" name="action" value="calculate_full" class="btn btn-primary w-100">Calculate Full</button>
+                        <button type="submit" name="action" value="calculate_full" class="btn btn-primary btn-modern w-100">
+                            <i class="fas fa-list me-1"></i> Calculate Full
+                        </button>
                     </div>
                 </div>
             </form>
             {% if files %}
-            <div class="mt-2"><strong>Files processed:</strong> {{ files|join(', ') }}</div>
+            <div class="mt-3"><strong><i class="fas fa-file me-1"></i> Files processed:</strong> {{ files|join(', ') }}</div>
             {% endif %}
         </div>
     </div>
@@ -748,14 +901,14 @@ HTML_TEMPLATE = '''
     <!-- 1) SUMMARY VIEW (when 'Calculate' is clicked)                  -->
     <!-- ============================================================ -->
     {% if results and action == 'calculate' %}
-    <div class="card">
-        <div class="card-header">📈 Results per File (Summary)</div>
+    <div class="modern-card">
+        <div class="card-header"><i class="fas fa-chart-bar me-2"></i>Results per File (Summary)</div>
         <div class="card-body">
             {% for r in results %}
             <div class="result-box">
                 <h5>
-                    📁 {{ r.filename }}
-                    <span class="store-badge">🏪 {{ r.store }}</span>
+                    <i class="fas fa-file-alt me-1"></i> {{ r.filename }}
+                    <span class="store-badge"><i class="fas fa-store me-1"></i>{{ r.store }}</span>
                     <small class="text-muted">({{ r.period }})</small>
                 </h5>
                 <div class="row">
@@ -791,16 +944,16 @@ HTML_TEMPLATE = '''
                     {% for cat, data in r.negative.items() %}{% set total_orders = total_orders + data.count %}{% endfor %}
                     {{ total_orders }}
                     &nbsp;&nbsp;|&nbsp;&nbsp;
-                    <span class="total-payout-box">📊 Total Payout (before cost): {{ "%.2f"|format(r.total_payout) }}</span>
+                    <span class="total-payout-box" style="background:#17a2b8;color:white;padding:6px 16px;border-radius:30px;">📊 Total Payout (before cost): {{ "%.2f"|format(r.total_payout) }}</span>
                     &nbsp;&nbsp;|&nbsp;&nbsp;
-                    <span class="final-payout-box">💰 Net Profit (after cost): {{ "%.2f"|format(r.net_profit) }}</span>
+                    <span class="final-payout-box" style="background:#28a745;color:white;padding:6px 16px;border-radius:30px;">💰 Net Profit (after cost): {{ "%.2f"|format(r.net_profit) }}</span>
                 </div>
             </div>
             {% endfor %}
 
-            <!-- Summary by Product (aggregated) -->
-            <div class="card mt-4">
-                <div class="card-header">📊 Summary by Product (all files)</div>
+            <!-- Summary by Product -->
+            <div class="card mt-4" style="border-radius:16px;border:none;background:#f1f9ff;">
+                <div class="card-header bg-transparent border-0" style="font-weight:600;"><i class="fas fa-layer-group me-2"></i>Summary by Product (all files)</div>
                 <div class="card-body">
                     {% for cat, agg in summary.items() %}
                     <div class="summary-box">
@@ -827,9 +980,9 @@ HTML_TEMPLATE = '''
             </div>
 
             <!-- Export buttons -->
-            <div class="export-buttons">
-                <a href="{{ url_for('export_excel') }}" class="btn btn-success btn-lg">📥 Download Excel</a>
-                <a href="{{ url_for('export_pdf') }}" class="btn btn-danger btn-lg">📥 Download PDF</a>
+            <div class="export-buttons mt-3 text-center">
+                <a href="{{ url_for('export_excel') }}" class="btn btn-success btn-lg"><i class="fas fa-file-excel me-1"></i> Download Excel</a>
+                <a href="{{ url_for('export_pdf') }}" class="btn btn-danger btn-lg"><i class="fas fa-file-pdf me-1"></i> Download PDF</a>
             </div>
         </div>
     </div>
@@ -839,8 +992,8 @@ HTML_TEMPLATE = '''
     <!-- 2) DETAILED VIEW (when 'Calculate Full' is clicked)           -->
     <!-- ============================================================ -->
     {% if detailed_data and action == 'calculate_full' %}
-    <div class="card">
-        <div class="card-header">📋 Full Order Payouts per Product</div>
+    <div class="modern-card">
+        <div class="card-header"><i class="fas fa-list-ul me-2"></i>Full Order Payouts per Product</div>
         <div class="card-body">
             {% for item in detailed_data %}
             <div class="result-box">
@@ -854,7 +1007,7 @@ HTML_TEMPLATE = '''
                     <div>Total Orders: <strong>{{ item.count }}</strong></div>
                     <div>Total Payout: <span class="total-profit">{{ "%.2f"|format(item.sum_payouts) }}</span></div>
                     <div>Cost per unit: {{ "%.2f"|format(item.cost) }}</div>
-                    <div><strong>Net Profit:</strong> <span class="final-payout-box">{{ "%.2f"|format(item.net_profit) }}</span></div>
+                    <div><strong>Net Profit:</strong> <span class="final-payout-box" style="background:#28a745;color:white;padding:4px 16px;border-radius:30px;">{{ "%.2f"|format(item.net_profit) }}</span></div>
                 </div>
             </div>
             {% endfor %}
@@ -868,17 +1021,32 @@ HTML_TEMPLATE = '''
             </div>
 
             <!-- Export buttons for detailed view -->
-            <div class="export-buttons">
-                <a href="{{ url_for('export_excel') }}" class="btn btn-success btn-lg">📥 Download Excel</a>
-                <a href="{{ url_for('export_pdf') }}" class="btn btn-danger btn-lg">📥 Download PDF</a>
+            <div class="export-buttons mt-3 text-center">
+                <a href="{{ url_for('export_excel') }}" class="btn btn-success btn-lg"><i class="fas fa-file-excel me-1"></i> Download Excel</a>
+                <a href="{{ url_for('export_pdf') }}" class="btn btn-danger btn-lg"><i class="fas fa-file-pdf me-1"></i> Download PDF</a>
             </div>
         </div>
     </div>
     {% endif %}
 
+    <div class="designer-credit">
+        <i class="fas fa-code me-1"></i> Designed with ❤️ by Shahar Yar
+    </div>
 </div>
 
 <script>
+    // Toggle product panel
+    function toggleProductPanel() {
+        const panel = document.getElementById('productPanel');
+        panel.classList.toggle('show');
+        const btn = document.getElementById('toggleProductsBtn');
+        if (panel.classList.contains('show')) {
+            btn.innerHTML = '<i class="fas fa-times me-1"></i> Hide Products';
+        } else {
+            btn.innerHTML = '<i class="fas fa-cog me-1"></i> Manage Products';
+        }
+    }
+
     // Clear undo session when alert is closed
     document.addEventListener('DOMContentLoaded', function() {
         var undoAlert = document.getElementById('undo-alert');
@@ -979,6 +1147,8 @@ HTML_TEMPLATE = '''
         });
     });
 </script>
+<!-- Bootstrap JS for alert dismissal -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
 '''
