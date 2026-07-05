@@ -132,7 +132,7 @@ def process_file(filepath):
         'net_profit': net_profit,
     }, None
 
-# ---------- Export functions (unchanged) ----------
+# ---------- Export functions ----------
 def generate_excel_summary(results, summary, grand_total, loss, final_profit):
     wb = Workbook()
     wb.remove(wb.active)
@@ -177,11 +177,12 @@ def generate_excel_summary(results, summary, grand_total, loss, final_profit):
         row += 2
 
     ws2 = wb.create_sheet("Summary by Product")
-    headers = ["Product", "Total Orders", "Positive Payouts", "Negative Payouts", "Net Payout", "Gross Profit", "Net Profit"]
+    headers = ["Product", "Total Orders", "Positive Payouts", "Negative Payouts", "Net Payout", "Gross Profit", "Net Profit", "Avg Profit"]
     for col, h in enumerate(headers, 1):
         ws2.cell(row=1, column=col, value=h)
     row = 2
     for cat, agg in summary.items():
+        avg_profit = agg['net_profit'] / agg['total_orders'] if agg['total_orders'] > 0 else 0
         ws2.cell(row=row, column=1, value=cat)
         ws2.cell(row=row, column=2, value=agg['total_orders'])
         ws2.cell(row=row, column=3, value=round(agg['total_positive'], 2))
@@ -189,6 +190,7 @@ def generate_excel_summary(results, summary, grand_total, loss, final_profit):
         ws2.cell(row=row, column=5, value=round(agg['net_payout'], 2))
         ws2.cell(row=row, column=6, value=round(agg['gross_profit'], 2))
         ws2.cell(row=row, column=7, value=round(agg['net_profit'], 2))
+        ws2.cell(row=row, column=8, value=round(avg_profit, 2))
         row += 1
     row += 1
     ws2.cell(row=row, column=1, value="Grand Total Net Profit (before 5%)")
@@ -225,6 +227,8 @@ def generate_excel_detailed(detailed_data, total_net_profit_all):
         ws.cell(row=row, column=1, value="Cost per unit: " + str(round(item['cost'], 2)))
         row += 1
         ws.cell(row=row, column=1, value="Net Profit: " + str(round(item['net_profit'], 2)))
+        avg = item['net_profit'] / item['count'] if item['count'] > 0 else 0
+        ws.cell(row=row, column=1, value="Average Profit per order: " + str(round(avg, 2)))
         row += 2
     loss = total_net_profit_all * 0.05
     final_profit = total_net_profit_all - loss
@@ -306,8 +310,9 @@ def generate_pdf_summary(results, summary, grand_total, loss, final_profit):
 
     story.append(Paragraph("Summary by Product (all files)", heading_style))
     story.append(Spacer(1, 6))
-    data4 = [["Product", "Orders", "Positive", "Negative", "Net Payout", "Gross Profit", "Net Profit"]]
+    data4 = [["Product", "Orders", "Positive", "Negative", "Net Payout", "Gross Profit", "Net Profit", "Avg Profit"]]
     for cat, agg in summary.items():
+        avg_profit = agg['net_profit'] / agg['total_orders'] if agg['total_orders'] > 0 else 0
         data4.append([
             cat,
             str(agg['total_orders']),
@@ -315,9 +320,10 @@ def generate_pdf_summary(results, summary, grand_total, loss, final_profit):
             f"{agg['total_negative']:.2f}",
             f"{agg['net_payout']:.2f}",
             f"{agg['gross_profit']:.2f}",
-            f"{agg['net_profit']:.2f}"
+            f"{agg['net_profit']:.2f}",
+            f"{avg_profit:.2f}"
         ])
-    t4 = Table(data4, colWidths=[100, 50, 70, 70, 70, 70, 70])
+    t4 = Table(data4, colWidths=[100, 50, 70, 70, 70, 70, 70, 70])
     t4.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.grey),
         ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
@@ -360,11 +366,13 @@ def generate_pdf_detailed(detailed_data, total_net_profit_all):
         ]))
         story.append(t)
         story.append(Spacer(1, 6))
+        avg = item['net_profit'] / item['count'] if item['count'] > 0 else 0
         summary_data = [
             ["Total Orders", str(item['count'])],
             ["Total Payout", f"{item['sum_payouts']:.2f}"],
             ["Cost per unit", f"{item['cost']:.2f}"],
-            ["Net Profit", f"{item['net_profit']:.2f}"]
+            ["Net Profit", f"{item['net_profit']:.2f}"],
+            ["Average Profit per order", f"{avg:.2f}"]
         ]
         t2 = Table(summary_data, colWidths=[150, 100])
         t2.setStyle(TableStyle([
@@ -400,7 +408,8 @@ def index():
         grand_total = 0.0
         filenames = []
         summary = defaultdict(lambda: {'total_orders': 0, 'total_positive': 0.0, 'total_negative': 0.0,
-                                       'net_payout': 0.0, 'gross_profit': 0.0, 'net_profit': 0.0})
+                                       'net_payout': 0.0, 'gross_profit': 0.0, 'net_profit': 0.0,
+                                       'average_profit': 0.0})
         detailed_orders = defaultdict(list)
         detailed_costs = {}
 
@@ -447,9 +456,12 @@ def index():
                 })
                 grand_total += result['net_profit']
 
+        # After processing all files, compute summary totals and net profits
         for cat in summary:
             summary[cat]['net_payout'] = summary[cat]['total_positive'] + summary[cat]['total_negative']
             summary[cat]['net_profit'] = summary[cat]['gross_profit'] + summary[cat]['total_negative']
+            # Compute average profit per order
+            summary[cat]['average_profit'] = summary[cat]['net_profit'] / summary[cat]['total_orders'] if summary[cat]['total_orders'] > 0 else 0
 
         loss = grand_total * 0.05
         final_profit = grand_total - loss
@@ -613,7 +625,7 @@ def add_product():
     save_products(products)
     return jsonify({'success': True})
 
-# ---------- HTML Template (new advanced UI) ----------
+# ---------- HTML Template ----------
 HTML_TEMPLATE = '''
 <!DOCTYPE html>
 <html>
@@ -965,7 +977,8 @@ HTML_TEMPLATE = '''
                             <div class="col-sm-3">Net Payout: <span class="total-profit">{{ "%.2f"|format(agg.net_payout) }}</span></div>
                         </div>
                         <div>Gross profit (after cost): {{ "%.2f"|format(agg.gross_profit) }}</div>
-                        <div><strong>Net Profit:</strong> <span class="total-profit">{{ "%.2f"|format(agg.net_profit) }}</span></div>
+                        <div>Net Profit: <span class="total-profit">{{ "%.2f"|format(agg.net_profit) }}</span></div>
+                        <div>Average Profit per order: <span class="total-profit">{{ "%.2f"|format(agg.average_profit) }}</span></div>
                     </div>
                     {% endfor %}
                 </div>
@@ -1007,7 +1020,9 @@ HTML_TEMPLATE = '''
                     <div>Total Orders: <strong>{{ item.count }}</strong></div>
                     <div>Total Payout: <span class="total-profit">{{ "%.2f"|format(item.sum_payouts) }}</span></div>
                     <div>Cost per unit: {{ "%.2f"|format(item.cost) }}</div>
-                    <div><strong>Net Profit:</strong> <span class="final-payout-box" style="background:#28a745;color:white;padding:4px 16px;border-radius:30px;">{{ "%.2f"|format(item.net_profit) }}</span></div>
+                    <div>Net Profit: <span class="final-payout-box" style="background:#28a745;color:white;padding:4px 16px;border-radius:30px;">{{ "%.2f"|format(item.net_profit) }}</span></div>
+                    {% set avg = item.net_profit / item.count if item.count > 0 else 0 %}
+                    <div>Average Profit per order: <span class="total-profit">{{ "%.2f"|format(avg) }}</span></div>
                 </div>
             </div>
             {% endfor %}
