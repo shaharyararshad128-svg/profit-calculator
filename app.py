@@ -25,6 +25,7 @@ DEFAULT_PRODUCTS = {
     'Circuit Breaker': {'cost': 1800, 'keywords': ['Circuit Breaker']},
     'Smart Plug': {'cost': 1100, 'keywords': ['Smart Socket']},
     'Otg Adapter': {'cost': 170, 'keywords': ['Otg Adapter', 'OTG']},
+    'Kitchen Faucet': {'cost': 330, 'keywords': ['faucet', 'faucet']},
 }
 
 STORE_MAP = {
