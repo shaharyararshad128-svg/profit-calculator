@@ -16,6 +16,7 @@ app = Flask(__name__)
 app.secret_key = 'your-secret-key-here'  # Change for production
 
 PRODUCTS_FILE = 'products.json'
+DEDUCTION_RATE = 0.02
 
 DEFAULT_PRODUCTS = {
     '2 in 1 Stylus Pen': {'cost': 100, 'keywords': ['Stylus']},
@@ -195,10 +196,10 @@ def generate_excel_summary(results, summary, grand_total, loss, final_profit):
         ws2.cell(row=row, column=9, value=round(avg_profit, 2))
         row += 1
     row += 1
-    ws2.cell(row=row, column=1, value="Grand Total Net Profit (before 5%)")
+    ws2.cell(row=row, column=1, value="Grand Total Net Profit (before 2%)")
     ws2.cell(row=row, column=2, value=round(grand_total, 2))
     row += 1
-    ws2.cell(row=row, column=1, value="Less 5% loss")
+    ws2.cell(row=row, column=1, value="Less 2% loss")
     ws2.cell(row=row, column=2, value=round(loss, 2))
     row += 1
     ws2.cell(row=row, column=1, value="FINAL NET PROFIT")
@@ -232,12 +233,12 @@ def generate_excel_detailed(detailed_data, total_net_profit_all):
         avg = item['net_profit'] / item['count'] if item['count'] > 0 else 0
         ws.cell(row=row, column=1, value="Average Profit per order: " + str(round(avg, 2)))
         row += 2
-    loss = total_net_profit_all * 0.05
+    loss = total_net_profit_all * DEDUCTION_RATE
     final_profit = total_net_profit_all - loss
-    ws.cell(row=row, column=1, value="Grand Total Net Profit (before 5%)")
+    ws.cell(row=row, column=1, value="Grand Total Net Profit (before 2%)")
     ws.cell(row=row, column=2, value=round(total_net_profit_all, 2))
     row += 1
-    ws.cell(row=row, column=1, value="Less 5% loss")
+    ws.cell(row=row, column=1, value="Less 2% loss")
     ws.cell(row=row, column=2, value=round(loss, 2))
     row += 1
     ws.cell(row=row, column=1, value="FINAL NET PROFIT")
@@ -338,8 +339,8 @@ def generate_pdf_summary(results, summary, grand_total, loss, final_profit):
     story.append(t4)
     story.append(Spacer(1, 12))
 
-    story.append(Paragraph(f"Grand Total Net Profit (before 5%): {grand_total:.2f}", heading_style))
-    story.append(Paragraph(f"Less 5% loss: -{loss:.2f}", normal_style))
+    story.append(Paragraph(f"Grand Total Net Profit (before 2%): {grand_total:.2f}", heading_style))
+    story.append(Paragraph(f"Less 2% loss: -{loss:.2f}", normal_style))
     story.append(Paragraph(f"FINAL NET PROFIT: {final_profit:.2f}", title_style))
 
     doc.build(story)
@@ -389,10 +390,10 @@ def generate_pdf_detailed(detailed_data, total_net_profit_all):
         story.append(t2)
         story.append(Spacer(1, 12))
 
-    loss = total_net_profit_all * 0.05
+    loss = total_net_profit_all * DEDUCTION_RATE
     final_profit = total_net_profit_all - loss
-    story.append(Paragraph(f"Grand Total Net Profit (before 5%): {total_net_profit_all:.2f}", heading_style))
-    story.append(Paragraph(f"Less 5% loss: -{loss:.2f}", normal_style))
+    story.append(Paragraph(f"Grand Total Net Profit (before 2%): {total_net_profit_all:.2f}", heading_style))
+    story.append(Paragraph(f"Less 2% loss: -{loss:.2f}", normal_style))
     story.append(Paragraph(f"FINAL NET PROFIT: {final_profit:.2f}", title_style))
 
     doc.build(story)
@@ -467,7 +468,7 @@ def index():
             total_cost = summary[cat]['total_orders'] * cost_price if summary[cat]['total_orders'] > 0 else 0
             summary[cat]['ri_percentage'] = (summary[cat]['net_profit'] / total_cost * 100) if total_cost else 0.0
 
-        loss = grand_total * 0.05
+        loss = grand_total * DEDUCTION_RATE
         final_profit = grand_total - loss
 
         session['summary_data'] = {
@@ -641,7 +642,7 @@ HTML_TEMPLATE = '''
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         body {
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            background: linear-gradient(135deg, #f4f8ff 0%, #eef3fb 28%, #e7ecf7 100%);
             min-height: 100vh;
             padding: 20px;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -651,59 +652,76 @@ HTML_TEMPLATE = '''
             margin: 0 auto;
         }
         .header-card {
-            background: linear-gradient(135deg, #2c3e50, #3498db);
+            background: linear-gradient(135deg, #0f172a 0%, #1d4ed8 50%, #3b82f6 100%);
             color: white;
-            border-radius: 20px;
+            border-radius: 24px;
             padding: 30px 30px 20px;
             margin-bottom: 30px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            box-shadow: 0 20px 40px rgba(31, 64, 140, 0.22);
+            overflow: hidden;
+            position: relative;
+        }
+        .header-card::before {
+            content: "";
+            position: absolute;
+            width: 220px;
+            height: 220px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 50%;
+            right: -40px;
+            top: -60px;
         }
         .header-card h1 {
             font-weight: 300;
             font-size: 2.5rem;
+            position: relative;
+            z-index: 1;
         }
         .header-card .subtitle {
-            opacity: 0.8;
+            opacity: 0.85;
             font-size: 1rem;
             margin-top: -5px;
+            position: relative;
+            z-index: 1;
         }
         .modern-card {
             background: rgba(255,255,255,0.9);
-            backdrop-filter: blur(10px);
+            backdrop-filter: blur(12px);
             border: none;
-            border-radius: 20px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            border-radius: 22px;
+            box-shadow: 0 16px 38px rgba(31, 41, 55, 0.09);
             margin-bottom: 25px;
             padding: 25px;
         }
         .modern-card .card-header {
             background: transparent;
-            border-bottom: 1px solid #eee;
+            border-bottom: 1px solid #edf1f8;
             padding: 0 0 15px 0;
-            font-weight: 600;
-            font-size: 1.2rem;
-            color: #2c3e50;
+            font-weight: 700;
+            font-size: 1.25rem;
+            color: #162033;
         }
         .btn-modern {
             border-radius: 50px;
             padding: 10px 28px;
-            font-weight: 500;
-            transition: all 0.3s;
+            font-weight: 600;
+            transition: all 0.3s ease;
         }
         .btn-modern:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.12);
         }
         .btn-toggle-products {
-            background: #6c757d;
+            background: rgba(255, 255, 255, 0.12);
             color: white;
-            border: none;
+            border: 1px solid rgba(255,255,255,0.28);
             padding: 8px 20px;
             border-radius: 50px;
             font-size: 0.9rem;
+            backdrop-filter: blur(8px);
         }
         .btn-toggle-products:hover {
-            background: #5a6268;
+            background: rgba(255,255,255,0.18);
             color: white;
         }
         .product-panel {
@@ -713,44 +731,112 @@ HTML_TEMPLATE = '''
             display: block;
         }
         .result-box {
-            background: #f8f9fa;
-            border-radius: 16px;
+            background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+            border-radius: 18px;
             padding: 20px;
-            margin-bottom: 20px;
-            border-left: 4px solid #3498db;
+            margin-bottom: 18px;
+            border: 1px solid #eef3fb;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.02);
         }
         .result-box h5 {
             margin-top: 0;
-            font-weight: 600;
+            font-weight: 700;
+            color: #1d2a38;
         }
-        .positive { color: #28a745; }
-        .negative { color: #dc3545; }
-        .total-profit { font-size: 1.2rem; font-weight: bold; }
+        .positive { color: #16a34a; }
+        .negative { color: #dc2626; }
+        .total-profit { font-size: 1.1rem; font-weight: bold; }
         .final-profit {
-            background: linear-gradient(135deg, #2c3e50, #1a252f);
+            background: linear-gradient(135deg, #101827 0%, #14213d 25%, #1e3a8a 100%);
             color: white;
-            padding: 25px;
-            border-radius: 16px;
+            padding: 30px 24px;
+            border-radius: 24px;
             text-align: center;
-            margin-top: 20px;
+            margin-top: 24px;
+            box-shadow: 0 24px 60px rgba(30, 58, 138, 0.35);
+            position: relative;
+            overflow: hidden;
         }
-        .final-profit .amount { font-size: 2.5rem; font-weight: bold; }
+        .final-profit::before {
+            content: "";
+            position: absolute;
+            width: 260px;
+            height: 260px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.07);
+            right: -60px;
+            top: -90px;
+        }
+        .final-profit::after {
+            content: "";
+            position: absolute;
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            background: rgba(96,165,250,0.12);
+            left: -40px;
+            bottom: -70px;
+        }
+        .final-profit > * {
+            position: relative;
+            z-index: 1;
+        }
+        .final-profit .label {
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            font-size: 0.74rem;
+            opacity: 0.8;
+            margin-bottom: 8px;
+        }
+        .final-profit .amount {
+            font-size: 2.7rem;
+            font-weight: 800;
+            letter-spacing: -0.04em;
+            line-height: 1.15;
+            margin: 8px 0 12px;
+        }
+        .final-profit .tiny {
+            font-size: 0.95rem;
+            opacity: 0.9;
+        }
+        .final-profit .final-row {
+            margin-top: 18px;
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .final-tag {
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.14);
+            border-radius: 999px;
+            padding: 10px 16px;
+            font-weight: 600;
+            backdrop-filter: blur(8px);
+        }
         .keyword-badge {
-            background: #e9ecef;
-            padding: 2px 10px;
+            background: #eef2ff;
+            padding: 3px 11px;
             border-radius: 30px;
             font-size: 0.7rem;
             margin-left: 5px;
-            color: #495057;
+            color: #3b4a68;
+            border: 1px solid #dfe6f3;
         }
         .summary-box {
-            background: #e8f4fd;
-            border-radius: 12px;
-            padding: 15px;
-            margin-bottom: 10px;
-            border-left: 4px solid #0d6efd;
+            background: linear-gradient(135deg, #eff6ff 0%, #f5faff 100%);
+            border-radius: 16px;
+            padding: 16px 18px;
+            margin-bottom: 12px;
+            border-left: 4px solid #3b82f6;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.5);
         }
-        .summary-box h6 { margin-top: 0; color: #0d6efd; }
+        .summary-box h6 {
+            margin-top: 0;
+            color: #1d4ed8;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
         .payout-list {
             max-height: 300px;
             overflow-y: auto;
@@ -761,27 +847,28 @@ HTML_TEMPLATE = '''
         }
         .payout-item { font-family: monospace; }
         .detail-summary {
-            background: #e9ecef;
-            padding: 10px;
-            border-radius: 8px;
+            background: #edf2ff;
+            padding: 12px 14px;
+            border-radius: 12px;
             margin-top: 10px;
         }
         .store-badge {
-            background: #6c757d;
+            background: linear-gradient(135deg, #475569, #0f172a);
             color: white;
-            padding: 4px 12px;
+            padding: 5px 12px;
             border-radius: 30px;
             font-size: 0.85rem;
         }
         .file-input-wrapper {
-            border: 2px dashed #ced4da;
-            border-radius: 16px;
+            border: 2px dashed #cbd5e1;
+            border-radius: 18px;
             padding: 30px;
             text-align: center;
             transition: border 0.3s;
+            background: linear-gradient(180deg, #f8fbff 0%, #fafdff 100%);
         }
         .file-input-wrapper:hover {
-            border-color: #3498db;
+            border-color: #60a5fa;
         }
         .file-input-wrapper input[type="file"] {
             display: block;
@@ -791,7 +878,7 @@ HTML_TEMPLATE = '''
         .export-buttons .btn {
             border-radius: 50px;
             padding: 12px 30px;
-            font-weight: 500;
+            font-weight: 600;
         }
         .product-item {
             display: flex;
@@ -805,20 +892,20 @@ HTML_TEMPLATE = '''
         .designer-credit {
             text-align: center;
             margin-top: 20px;
-            color: #6c757d;
+            color: #6b7280;
             font-size: 0.9rem;
-            opacity: 0.8;
+            opacity: 0.9;
         }
         @media (max-width: 768px) {
             .header-card h1 { font-size: 1.8rem; }
             .modern-card { padding: 15px; }
+            .final-profit .amount { font-size: 2.1rem; }
         }
     </style>
 </head>
 <body>
 <div class="main-container">
 
-    <!-- Header -->
     <div class="header-card">
         <div class="d-flex justify-content-between align-items-center">
             <div>
@@ -833,7 +920,6 @@ HTML_TEMPLATE = '''
         </div>
     </div>
 
-    <!-- Undo deletion alert -->
     {% if session.deleted_product %}
     <div id="undo-alert" class="alert alert-warning alert-dismissible fade show modern-card" role="alert" style="padding:15px 20px;">
         <strong><i class="fas fa-undo me-1"></i> Product "{{ session.deleted_product.category }}" deleted.</strong>
@@ -842,7 +928,6 @@ HTML_TEMPLATE = '''
     </div>
     {% endif %}
 
-    <!-- Product Management Panel (hidden by default) -->
     <div id="productPanel" class="product-panel">
         <div class="modern-card">
             <div class="card-header"><i class="fas fa-box me-2"></i>Product Costs</div>
@@ -885,7 +970,6 @@ HTML_TEMPLATE = '''
         </div>
     </div>
 
-    <!-- File Upload Card -->
     <div class="modern-card">
         <div class="card-header"><i class="fas fa-upload me-2"></i>Upload CSV Files</div>
         <div class="card-body">
@@ -986,10 +1070,14 @@ HTML_TEMPLATE = '''
             </div>
 
             <div class="final-profit">
-                <div>Grand Total Net Profit (before 5%)</div>
-                <div class="amount">{{ "%.2f"|format(grand_total) }}</div>
-                <div>Less 5% loss: -{{ "%.2f"|format(loss) }}</div>
-                <div style="font-size: 1.8rem; margin-top: 10px;">💰 FINAL NET PROFIT: {{ "%.2f"|format(final_profit) }}</div>
+                <div class="label">Performance Summary</div>
+                <div class="amount">{{ "%.2f"|format(final_profit) }}</div>
+                <div class="tiny">Grand Total Net Profit (before 2%) : {{ "%.2f"|format(grand_total) }}</div>
+                <div class="tiny">Less 2% loss : -{{ "%.2f"|format(loss) }}</div>
+                <div class="final-row">
+                    <span class="final-tag">Final Net Profit</span>
+                    <span class="final-tag">After 2% Deduction</span>
+                </div>
             </div>
 
             <div class="export-buttons mt-3 text-center">
@@ -1023,12 +1111,16 @@ HTML_TEMPLATE = '''
             </div>
             {% endfor %}
             <div class="final-profit" style="margin-top: 20px;">
-                <div>Grand Total Net Profit (before 5%)</div>
-                <div class="amount">{{ "%.2f"|format(total_net_profit_all) }}</div>
-                {% set loss_detailed = total_net_profit_all * 0.05 %}
+                <div class="label">Performance Summary</div>
+                {% set loss_detailed = total_net_profit_all * 0.02 %}
                 {% set final_profit_detailed = total_net_profit_all - loss_detailed %}
-                <div>Less 5% loss: -{{ "%.2f"|format(loss_detailed) }}</div>
-                <div style="font-size: 1.8rem; margin-top: 10px;">💰 FINAL NET PROFIT: {{ "%.2f"|format(final_profit_detailed) }}</div>
+                <div class="amount">{{ "%.2f"|format(final_profit_detailed) }}</div>
+                <div class="tiny">Grand Total Net Profit (before 2%) : {{ "%.2f"|format(total_net_profit_all) }}</div>
+                <div class="tiny">Less 2% loss : -{{ "%.2f"|format(loss_detailed) }}</div>
+                <div class="final-row">
+                    <span class="final-tag">Final Net Profit</span>
+                    <span class="final-tag">After 2% Deduction</span>
+                </div>
             </div>
 
             <div class="export-buttons mt-3 text-center">
