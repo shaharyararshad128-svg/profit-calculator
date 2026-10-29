@@ -12,7 +12,7 @@
         ]
     },
     "Circuit Breaker": {
-        "cost": 1700,
+        "cost": 1750,
         "keywords": [
             "Circuit Breaker"
         ]
@@ -45,6 +45,11 @@
         "cost": 100,
         "keywords": [
             "Stylus"
+            },
+    "Kitchen Faucet": {
+        "cost": 330,
+        "keywords": [
+            "faucet"
         ]
     }
 }
