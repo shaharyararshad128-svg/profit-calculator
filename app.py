@@ -178,7 +178,7 @@ def generate_excel_summary(results, summary, grand_total, loss, final_profit):
         row += 2
 
     ws2 = wb.create_sheet("Summary by Product")
-    headers = ["Product", "Total Orders", "Positive Payouts", "Negative Payouts", "Net Payout", "Gross Profit", "Net Profit", "Avg Profit"]
+    headers = ["Product", "Total Orders", "Positive Payouts", "Negative Payouts", "Net Payout", "Gross Profit", "Net Profit", "RI (%)", "Avg Profit"]
     for col, h in enumerate(headers, 1):
         ws2.cell(row=1, column=col, value=h)
     row = 2
@@ -191,7 +191,8 @@ def generate_excel_summary(results, summary, grand_total, loss, final_profit):
         ws2.cell(row=row, column=5, value=round(agg['net_payout'], 2))
         ws2.cell(row=row, column=6, value=round(agg['gross_profit'], 2))
         ws2.cell(row=row, column=7, value=round(agg['net_profit'], 2))
-        ws2.cell(row=row, column=8, value=round(avg_profit, 2))
+        ws2.cell(row=row, column=8, value=round(agg.get('ri_percentage', 0), 2))
+        ws2.cell(row=row, column=9, value=round(avg_profit, 2))
         row += 1
     row += 1
     ws2.cell(row=row, column=1, value="Grand Total Net Profit (before 5%)")
@@ -311,7 +312,7 @@ def generate_pdf_summary(results, summary, grand_total, loss, final_profit):
 
     story.append(Paragraph("Summary by Product (all files)", heading_style))
     story.append(Spacer(1, 6))
-    data4 = [["Product", "Orders", "Positive", "Negative", "Net Payout", "Gross Profit", "Net Profit", "Avg Profit"]]
+    data4 = [["Product", "Orders", "Positive", "Negative", "Net Payout", "Gross Profit", "Net Profit", "RI (%)", "Avg Profit"]]
     for cat, agg in summary.items():
         avg_profit = agg['net_profit'] / agg['total_orders'] if agg['total_orders'] > 0 else 0
         data4.append([
@@ -322,9 +323,10 @@ def generate_pdf_summary(results, summary, grand_total, loss, final_profit):
             f"{agg['net_payout']:.2f}",
             f"{agg['gross_profit']:.2f}",
             f"{agg['net_profit']:.2f}",
+            f"{agg.get('ri_percentage', 0):.2f}",
             f"{avg_profit:.2f}"
         ])
-    t4 = Table(data4, colWidths=[100, 50, 70, 70, 70, 70, 70, 70])
+    t4 = Table(data4, colWidths=[100, 50, 70, 70, 70, 70, 70, 60, 70])
     t4.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.grey),
         ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
@@ -410,7 +412,7 @@ def index():
         filenames = []
         summary = defaultdict(lambda: {'total_orders': 0, 'total_positive': 0.0, 'total_negative': 0.0,
                                        'net_payout': 0.0, 'gross_profit': 0.0, 'net_profit': 0.0,
-                                       'average_profit': 0.0})
+                                       'average_profit': 0.0, 'ri_percentage': 0.0})
         detailed_orders = defaultdict(list)
         detailed_costs = {}
 
@@ -457,12 +459,13 @@ def index():
                 })
                 grand_total += result['net_profit']
 
-        # After processing all files, compute summary totals and net profits
         for cat in summary:
             summary[cat]['net_payout'] = summary[cat]['total_positive'] + summary[cat]['total_negative']
             summary[cat]['net_profit'] = summary[cat]['gross_profit'] + summary[cat]['total_negative']
-            # Compute average profit per order
             summary[cat]['average_profit'] = summary[cat]['net_profit'] / summary[cat]['total_orders'] if summary[cat]['total_orders'] > 0 else 0
+            cost_price = get_cost(cat, products)
+            total_cost = summary[cat]['total_orders'] * cost_price if summary[cat]['total_orders'] > 0 else 0
+            summary[cat]['ri_percentage'] = (summary[cat]['net_profit'] / total_cost * 100) if total_cost else 0.0
 
         loss = grand_total * 0.05
         final_profit = grand_total - loss
@@ -910,9 +913,6 @@ HTML_TEMPLATE = '''
         </div>
     </div>
 
-    <!-- ============================================================ -->
-    <!-- 1) SUMMARY VIEW (when 'Calculate' is clicked)                  -->
-    <!-- ============================================================ -->
     {% if results and action == 'calculate' %}
     <div class="modern-card">
         <div class="card-header"><i class="fas fa-chart-bar me-2"></i>Results per File (Summary)</div>
@@ -964,7 +964,6 @@ HTML_TEMPLATE = '''
             </div>
             {% endfor %}
 
-            <!-- Summary by Product -->
             <div class="card mt-4" style="border-radius:16px;border:none;background:#f1f9ff;">
                 <div class="card-header bg-transparent border-0" style="font-weight:600;"><i class="fas fa-layer-group me-2"></i>Summary by Product (all files)</div>
                 <div class="card-body">
@@ -979,13 +978,13 @@ HTML_TEMPLATE = '''
                         </div>
                         <div>Gross profit (after cost): {{ "%.2f"|format(agg.gross_profit) }}</div>
                         <div>Net Profit: <span class="total-profit">{{ "%.2f"|format(agg.net_profit) }}</span></div>
+                        <div>RI (%): <span class="total-profit">{{ "%.2f"|format(agg.ri_percentage) }}%</span></div>
                         <div>Average Profit per order: <span class="total-profit">{{ "%.2f"|format(agg.average_profit) }}</span></div>
                     </div>
                     {% endfor %}
                 </div>
             </div>
 
-            <!-- Final combined -->
             <div class="final-profit">
                 <div>Grand Total Net Profit (before 5%)</div>
                 <div class="amount">{{ "%.2f"|format(grand_total) }}</div>
@@ -993,7 +992,6 @@ HTML_TEMPLATE = '''
                 <div style="font-size: 1.8rem; margin-top: 10px;">💰 FINAL NET PROFIT: {{ "%.2f"|format(final_profit) }}</div>
             </div>
 
-            <!-- Export buttons -->
             <div class="export-buttons mt-3 text-center">
                 <a href="{{ url_for('export_excel') }}" class="btn btn-success btn-lg"><i class="fas fa-file-excel me-1"></i> Download Excel</a>
                 <a href="{{ url_for('export_pdf') }}" class="btn btn-danger btn-lg"><i class="fas fa-file-pdf me-1"></i> Download PDF</a>
@@ -1002,9 +1000,6 @@ HTML_TEMPLATE = '''
     </div>
     {% endif %}
 
-    <!-- ============================================================ -->
-    <!-- 2) DETAILED VIEW (when 'Calculate Full' is clicked)           -->
-    <!-- ============================================================ -->
     {% if detailed_data and action == 'calculate_full' %}
     <div class="modern-card">
         <div class="card-header"><i class="fas fa-list-ul me-2"></i>Full Order Payouts per Product</div>
@@ -1036,7 +1031,6 @@ HTML_TEMPLATE = '''
                 <div style="font-size: 1.8rem; margin-top: 10px;">💰 FINAL NET PROFIT: {{ "%.2f"|format(final_profit_detailed) }}</div>
             </div>
 
-            <!-- Export buttons for detailed view -->
             <div class="export-buttons mt-3 text-center">
                 <a href="{{ url_for('export_excel') }}" class="btn btn-success btn-lg"><i class="fas fa-file-excel me-1"></i> Download Excel</a>
                 <a href="{{ url_for('export_pdf') }}" class="btn btn-danger btn-lg"><i class="fas fa-file-pdf me-1"></i> Download PDF</a>
@@ -1051,7 +1045,6 @@ HTML_TEMPLATE = '''
 </div>
 
 <script>
-    // Toggle product panel
     function toggleProductPanel() {
         const panel = document.getElementById('productPanel');
         panel.classList.toggle('show');
@@ -1063,7 +1056,6 @@ HTML_TEMPLATE = '''
         }
     }
 
-    // Clear undo session when alert is closed
     document.addEventListener('DOMContentLoaded', function() {
         var undoAlert = document.getElementById('undo-alert');
         if (undoAlert) {
@@ -1073,7 +1065,6 @@ HTML_TEMPLATE = '''
         }
     });
 
-    // Product management JavaScript (unchanged)
     document.querySelectorAll('.edit-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             const idx = this.dataset.index;
@@ -1163,7 +1154,6 @@ HTML_TEMPLATE = '''
         });
     });
 </script>
-<!-- Bootstrap JS for alert dismissal -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
